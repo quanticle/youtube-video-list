@@ -2,7 +2,8 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [clj-http.client :as http-client]
-            [clojure.data.json :as json])
+            [clojure.data.json :as json]
+            [clojure.instant :as time])
   (:gen-class))
 
 (def client-key-file-name "client-key")
@@ -49,12 +50,53 @@
    ID) from the PlaylistItems API response"
   (map #(hash-map :video-title (get-in % [:snippet :title])
           :video-id (get-in % [:contentDetails :videoId])
-          :upload-date (get-in % [:contentDetails :videoPublishedAt]))
+          :upload-date (time/read-instant-date (get-in % [:contentDetails :videoPublishedAt])))
        (:items playlist-items-response)))
 
+(defn get-video-info-from-playlist [api-key playlist-id]
+  "Gets a list of all the videos from the given playlist ID"
+  (loop [current-results []
+         next-page-token nil]
+    (let [http-response (http-client/get
+                         "https://www.googleapis.com/youtube/v3/playlistItems"
+                         {:accept :json
+                          :query-params (merge
+                                         {:key api-key
+                                          :playlistId playlist-id
+                                          :part "snippet,contentDetails"
+                                          :maxResults 50}
+                                         (when next-page-token
+                                           {:pageToken next-page-token}))})
+          response-data (if (= (:status http-response) 200)
+                          (json/read-str (:body http-response) :key-fn keyword))]
+      (if (= (:status http-response) 200)
+        (if (:nextPageToken response-data)
+          (recur
+           (into current-results (get-video-data response-data))
+           (:nextPageToken response-data))
+          (into current-results (get-video-data response-data)))
+        (throw (Exception. (str "Did not get a valid response from the YouTube API: " (:status http-response))))))))
 
-          
-      
+(defn unformatted-output [video-info]
+  "Prints video info in a simple tab-delimited, newline separated format
+   suitable for file output"
+  (dorun (map (fn [vid]
+                (printf "%s\t%s\t%s\n"
+                        (format "%1$TF %1$TT" (:upload-date vid))
+                        (:video-title vid)
+                        (format "https://youtu.be/%s" (:video-id vid))))
+              video-info)))
+
+(defn split-video-title [title max-width]
+  "Splits the title string into a number of strings, each of which is shorter than max width"
+  (let [words (str/split title #" ")
+        [lines last-line _] (reduce (fn [[lines cur-line cur-line-len] next-word]
+                                      (if (> (+ cur-line-len 1 (count next-word)) max-width)
+                                        [(conj lines cur-line) [next-word] (count next-word)]
+                                        [lines (conj cur-line next-word) (+ cur-line-len (count next-word) 1)]))
+                                    [[] [] 0]
+                                    words)]
+    (map #(str/join " " %) (conj lines last-line))))
 
 (defn -main
   "I don't do a whole lot ... yet."
