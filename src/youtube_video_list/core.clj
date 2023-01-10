@@ -107,6 +107,20 @@
           (:video-title video-info)
           (format "https://youtu.be/%s" (:video-id video-info))))
 
+(defn three-column-format [video-info title-width]
+  "Output the video info in a three column format for wider displays"
+  (let [split-title (split-video-title (:video-title video-info) title-width)
+        first-line (format "%s %s %s"
+                           (format "%1$TF %1$TT" (:upload-date video-info))
+                           (first split-title)
+                           (format "https://youtu.be/%s" (:video-id video-info)))
+        remaining-lines (map #(format "%s %s %s"
+                                      (str/join (repeat 19 " "))
+                                      %
+                                      (str/join (repeat 28 " ")))
+                             (rest split-title))]
+    (str/join "\n" (concat [first-line] remaining-lines))))
+
 
 
 (defn -main

@@ -2,6 +2,7 @@
   (:require [clojure.test :refer :all]
             [clojure.java.io :as io]
             [clojure.instant :as time]
+            [clojure.string :as str]
             [mockery.core :refer :all]
             [youtube-video-list.core :refer :all]))
 
@@ -144,4 +145,18 @@
                    (format "%1$TF %1$TT" (time/read-instant-date "2022-12-17T15:34:27Z"))
                    "Test video title"
                    "https://youtu.be/test_video_id")))))
-                                  
+
+(deftest test-three-column
+  (testing "Three column output"
+    (is (= (three-column-format (map->video-info {:video-id "test_video_id"
+                                                  :video-title "The quick brown fox jumps over the lazy dog"
+                                                  :upload-date (time/read-instant-date "2022-12-17T17:43:45Z")})
+                                20)
+           (str/join "\n"
+            [(format "%s %s %s"
+                    (format "%1$TF %1TT" (time/read-instant-date "2022-12-17T17:43:45Z"))
+                    "The quick brown fox"
+                    "https://youtu.be/test_video_id")
+            "                    jumps over the lazy                             "
+            "                    dog                             "])))))
+                    
