@@ -8,6 +8,8 @@
 
 (def client-key-file-name "client-key")
 
+(defrecord video-info [upload-date video-title video-id])
+
 (defn load-client-key [file-name]
   "Loads the client key from the given file. The file is assumed to have just 
    the API key, with a possible trailing newline."
@@ -48,9 +50,9 @@
 (defn get-video-data [playlist-items-response]
   "Extracts the fields we're interested in (video title, upload date and video
    ID) from the PlaylistItems API response"
-  (map #(hash-map :video-title (get-in % [:snippet :title])
-          :video-id (get-in % [:contentDetails :videoId])
-          :upload-date (time/read-instant-date (get-in % [:contentDetails :videoPublishedAt])))
+  (map #(map->video-info {:video-title (get-in % [:snippet :title])
+                          :video-id (get-in % [:contentDetails :videoId])
+                          :upload-date (time/read-instant-date (get-in % [:contentDetails :videoPublishedAt]))})
        (:items playlist-items-response)))
 
 (defn get-video-info-from-playlist [api-key playlist-id]
@@ -97,6 +99,15 @@
                                     [[] [] 0]
                                     words)]
     (map #(str/join " " %) (conj lines last-line))))
+
+(defn single-column-format [video-info]
+  "Output the video info in a single column, for narrow displays"
+  (format "%s\n%s\n%s\n"
+          (format "%1$TF %1$TT" (:upload-date video-info))
+          (:video-title video-info)
+          (format "https://youtu.be/%s" (:video-id video-info))))
+
+
 
 (defn -main
   "I don't do a whole lot ... yet."

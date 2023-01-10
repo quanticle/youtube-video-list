@@ -45,9 +45,9 @@
       (is (= (get-video-data {:items [{:snippet {:title "Test video"}
                                        :contentDetails {:videoId "test_id"
                                                         :videoPublishedAt "test_date"}}]})
-             '({:video-title "Test video"
+             [(map->video-info {:video-title "Test video"
                 :video-id "test_id"
-                :upload-date "foo"})))
+                :upload-date "foo"})]))
       (is (= (:call-args @mock-date) ["test_date"]))))
   (testing "Multiple videos"
     (with-mock mock-date {:target :clojure.instant/read-instant-date
@@ -59,12 +59,12 @@
                                {:snippet {:title "Test video 2"}
                                 :contentDetails {:videoId "test_id_2"
                                                  :videoPublishedAt "test date 2"}}]})
-             '({:video-title "Test video 1"
-                :video-id "test_id_1"
-                :upload-date "foo"}
-               {:video-title "Test video 2"
-                :video-id "test_id_2"
-                :upload-date "foo"})))
+             [(map->video-info {:video-title "Test video 1"
+                                :video-id "test_id_1"
+                                :upload-date "foo"})
+              (map->video-info {:video-title "Test video 2"
+                                :video-id "test_id_2"
+                                :upload-date "foo"})]))
       (is (= (:call-args-list @mock-date) [["test date 1"] ["test date 2"]])))))
 
 (deftest test-get-video-info-from-playlist
@@ -134,3 +134,14 @@
 (deftest test-split-video-title
   (testing "Split video title"
     (is (= (split-video-title "The quick brown fox jumps over the lazy dog" 20) ["The quick brown fox" "jumps over the lazy" "dog"]))))
+
+(deftest test-single-column
+  (testing "Single column display"
+    (is (= (single-column-format (map->video-info {:video-id "test_video_id"
+                                                   :video-title "Test video title"
+                                                   :upload-date (time/read-instant-date "2022-12-17T15:34:27Z")}))
+           (format "%s\n%s\n%s\n"
+                   (format "%1$TF %1$TT" (time/read-instant-date "2022-12-17T15:34:27Z"))
+                   "Test video title"
+                   "https://youtu.be/test_video_id")))))
+                                  
