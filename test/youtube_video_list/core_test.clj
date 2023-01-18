@@ -141,7 +141,7 @@
     (is (= (single-column-format (map->video-info {:video-id "test_video_id"
                                                    :video-title "Test video title"
                                                    :upload-date (time/read-instant-date "2022-12-17T15:34:27Z")}))
-           (format "%s\n%s\n%s\n"
+           (format "%s\n%s\n%s"
                    (format "%1$TF %1$TT" (time/read-instant-date "2022-12-17T15:34:27Z"))
                    "Test video title"
                    "https://youtu.be/test_video_id")))))
@@ -158,5 +158,13 @@
                     "The quick brown fox"
                     "https://youtu.be/test_video_id")
             "                    jumps over the lazy                             "
-            "                    dog                             "])))))
-                    
+            "                    dog                             "]))))
+  (testing "Three column output, max width adequate"
+    (is (= (three-column-format (map->video-info {:video-id "test_video_id"
+                                                  :video-title "The quick brown fox jumps over the lazy dog"
+                                                  :upload-date (time/read-instant-date "2022-12-17T17:43:45Z")})
+                                80)
+           (format "%s %s %s"
+                   (format "%1$TF %1$TT" (time/read-instant-date "2022-12-17T17:43:45Z"))
+                   "The quick brown fox jumps over the lazy dog"
+                   "https://youtu.be/test_video_id")))))

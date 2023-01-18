@@ -7,6 +7,9 @@
   (:gen-class))
 
 (def client-key-file-name "client-key")
+(def youtube-link-width 28)
+(def video-upload-time-width 19)
+(def wide-terminal-width 80)
 
 (defrecord video-info [upload-date video-title video-id])
 
@@ -90,7 +93,8 @@
               video-info)))
 
 (defn split-video-title [title max-width]
-  "Splits the title string into a number of strings, each of which is shorter than max width"
+  "Splits the title string into a number of strings, each of which is shorter 
+   than max width"
   (let [words (str/split title #" ")
         [lines last-line _] (reduce (fn [[lines cur-line cur-line-len] next-word]
                                       (if (> (+ cur-line-len 1 (count next-word)) max-width)
@@ -102,7 +106,7 @@
 
 (defn single-column-format [video-info]
   "Output the video info in a single column, for narrow displays"
-  (format "%s\n%s\n%s\n"
+  (format "%s\n%s\n%s"
           (format "%1$TF %1$TT" (:upload-date video-info))
           (:video-title video-info)
           (format "https://youtu.be/%s" (:video-id video-info))))
@@ -115,12 +119,21 @@
                            (first split-title)
                            (format "https://youtu.be/%s" (:video-id video-info)))
         remaining-lines (map #(format "%s %s %s"
-                                      (str/join (repeat 19 " "))
+                                      (str/join (repeat video-upload-time-width " "))
                                       %
-                                      (str/join (repeat 28 " ")))
+                                      (str/join (repeat youtube-link-width " ")))
                              (rest split-title))]
     (str/join "\n" (concat [first-line] remaining-lines))))
 
+(defn print-video-info [video-list]
+  "Prints the video info to STDOUT. Relies on the wrapper script to handle the 
+   istty() call to determine if the output is going to a terminal."
+  (if (System/getenv "FILE_OUTPUT")
+    (unformatted-output video-list)
+    (if (> (System/getenv "COLUMNS") wide-terminal-width)
+      (let [title-width (- (System/getenv "COLUMNS") youtube-link-width video-upload-time-width)]
+        (println (str/join "\n" (map #(three-column-format % title-width) video-list))))
+      (println (str/join "\n" (map single-column-format video-list))))))
 
 
 (defn -main
