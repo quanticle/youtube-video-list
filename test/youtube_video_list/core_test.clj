@@ -4,7 +4,7 @@
             [clojure.instant :as time]
             [clojure.string :as str]
             [mockery.core :refer :all]
-            [youtube-video-list :refer :all]))
+            [youtube-video-list.core :refer :all]))
 
 (deftest test-get-uploads-playlist-id
   (testing "Get uploads playlist for username"
@@ -73,7 +73,7 @@
     (with-mocks [mock-http {:target :clj-http.client/get
                             :return {:status 200
                                      :body "{\"info\": \"test data\"}"}}
-                 mock-get-video-data {:target :youtube-video-list/get-video-data
+                 mock-get-video-data {:target :youtube-video-list.core/get-video-data
                                       :return ["test video info"]}]
       (is (= (get-video-info-from-playlist "test api key" "test playlist id") ["test video info"]))
       (is (= (:call-args @mock-http) ["https://www.googleapis.com/youtube/v3/playlistItems"
@@ -93,7 +93,7 @@
                                      :body "{\"data\": \"data-3\"}"}])]
       (with-mocks [mock-http {:target :clj-http.client/get
                               :return (fn [& _] (first (first (swap-vals! http-response-data rest))))}
-                   mock-get-video-data {:target :youtube-video-list/get-video-data}]
+                   mock-get-video-data {:target :youtube-video-list.core/get-video-data}]
         (get-video-info-from-playlist "test api key" "test playlist id")
         (is (= (:call-args-list @mock-http) [["https://www.googleapis.com/youtube/v3/playlistItems"
                                               {:accept :json

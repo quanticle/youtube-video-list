@@ -1,4 +1,4 @@
-(ns youtube-video-list
+(ns youtube-video-list.core
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [clj-http.client :as http-client]
