@@ -125,13 +125,18 @@
                              (rest split-title))]
     (str/join "\n" (concat [first-line] remaining-lines))))
 
+(defn get-env-var [var-name]
+  "Simple wrapper function around System/getenv. This makes it easier to mock
+   calls to System/getenv in unit tests."
+  (System/getenv var-name))
+
 (defn print-video-info [video-list]
   "Prints the video info to STDOUT. Relies on the wrapper script to handle the 
    istty() call to determine if the output is going to a terminal."
-  (if (System/getenv "FILE_OUTPUT")
+  (if (= (Integer/parseInt (get-env-var "FILE_OUTPUT")) 1)
     (unformatted-output video-list)
-    (if (> (System/getenv "COLUMNS") wide-terminal-width)
-      (let [title-width (- (System/getenv "COLUMNS") youtube-link-width video-upload-time-width)]
+    (if (>= (Integer/parseInt (get-env-var "COLUMNS")) wide-terminal-width)
+      (let [title-width (- (Integer/parseInt (get-env-var "COLUMNS")) youtube-link-width video-upload-time-width)]
         (println (str/join "\n" (map #(three-column-format % title-width) video-list))))
       (println (str/join "\n" (map single-column-format video-list))))))
 

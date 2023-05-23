@@ -168,3 +168,13 @@
                    (format "%1$TF %1$TT" (time/read-instant-date "2022-12-17T17:43:45Z"))
                    "The quick brown fox jumps over the lazy dog"
                    "https://youtu.be/test_video_id")))))
+
+(deftest test-print-video-info
+  (testing "Verify that print-video-info accesses the correct environment variables"
+    (with-mocks [mock-env {:target :youtube-video-list.core/get-env-var
+                           :return (fn [env-var]
+                                     (cond (= env-var "COLUMNS") "80"
+                                           (= env-var "FILE_OUTPUT") "0"))}
+                 mock-three-column-format {:target :youtube-video-list.core/three-column-format}]
+      (print-video-info ["test"])
+      (is (= (:call-args-list @mock-three-column-format) ['("test" 33)])))))
