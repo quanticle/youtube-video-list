@@ -148,23 +148,23 @@
 
 (deftest test-three-column
   (testing "Three column output"
-    (is (= (three-column-format (map->video-info {:video-id "test_video_id"
-                                                  :video-title "The quick brown fox jumps over the lazy dog"
-                                                  :upload-date (time/read-instant-date "2022-12-17T17:43:45Z")})
+    (is (= (three-column-format [(map->video-info {:video-id "test_video_id"
+                                                   :video-title "The quick brown fox jumps over the lazy dog"
+                                                   :upload-date (time/read-instant-date "2022-12-17T17:43:45Z")})]
                                 20)
            (str/join "\n"
-            [(format "%s %s %s"
+            [(format "%s  %-19s  %s"
                     (format "%1$TF %1TT" (time/read-instant-date "2022-12-17T17:43:45Z"))
                     "The quick brown fox"
                     "https://youtu.be/test_video_id")
-            "                    jumps over the lazy                             "
-            "                    dog                             "]))))
+             (format "%19s  %-19s  %28s" " " "jumps over the lazy" " ")
+             (format "%19s  %-19s  %28s" " " "dog" " ")]))))
   (testing "Three column output, max width adequate"
-    (is (= (three-column-format (map->video-info {:video-id "test_video_id"
-                                                  :video-title "The quick brown fox jumps over the lazy dog"
-                                                  :upload-date (time/read-instant-date "2022-12-17T17:43:45Z")})
+    (is (= (three-column-format [(map->video-info {:video-id "test_video_id"
+                                                   :video-title "The quick brown fox jumps over the lazy dog"
+                                                   :upload-date (time/read-instant-date "2022-12-17T17:43:45Z")})]
                                 80)
-           (format "%s %s %s"
+           (format "%s  %s  %s"
                    (format "%1$TF %1$TT" (time/read-instant-date "2022-12-17T17:43:45Z"))
                    "The quick brown fox jumps over the lazy dog"
                    "https://youtu.be/test_video_id")))))
@@ -177,4 +177,4 @@
                                            (= env-var "FILE_OUTPUT") "0"))}
                  mock-three-column-format {:target :youtube-video-list.core/three-column-format}]
       (print-video-info ["test"])
-      (is (= (:call-args-list @mock-three-column-format) ['("test" 33)])))))
+      (is (= (:call-args-list @mock-three-column-format) ['(["test"] 29)])))))

@@ -111,19 +111,24 @@
           (:video-title video-info)
           (format "https://youtu.be/%s" (:video-id video-info))))
 
-(defn three-column-format [video-info title-width]
+(defn three-column-format [video-list title-width]
   "Output the video info in a three column format for wider displays"
-  (let [split-title (split-video-title (:video-title video-info) title-width)
-        first-line (format "%s %s %s"
-                           (format "%1$TF %1$TT" (:upload-date video-info))
-                           (first split-title)
-                           (format "https://youtu.be/%s" (:video-id video-info)))
-        remaining-lines (map #(format "%s %s %s"
-                                      (str/join (repeat video-upload-time-width " "))
-                                      %
-                                      (str/join (repeat youtube-link-width " ")))
-                             (rest split-title))]
-    (str/join "\n" (concat [first-line] remaining-lines))))
+  (let [split-titles (map #(split-video-title (:video-title %) title-width) video-list)
+        max-title-line-width (apply max (flatten (map #(map count %) split-titles)))
+        format-string (format "%%-%ds  %%-%ds  %%-%ds" 
+                              video-upload-time-width
+                              max-title-line-width
+                              youtube-link-width)]
+    (str/join "\n" (map (fn [video-info] 
+                          (let [split-title (split-video-title (:video-title video-info) title-width)
+                                first-line (format format-string
+                                                   (format "%1$TF %1$TT" (:upload-date video-info))
+                                                   (first split-title)
+                                                   (format "https://youtu.be/%s" (:video-id video-info)))
+                                remaining-lines (map #(format format-string " " % " ")
+                                                     (rest split-title))]
+                            (str/join "\n" (concat [first-line] remaining-lines))))
+                        video-list))))
 
 (defn get-env-var [var-name]
   "Simple wrapper function around System/getenv. This makes it easier to mock
@@ -136,12 +141,20 @@
   (if (= (Integer/parseInt (get-env-var "FILE_OUTPUT")) 1)
     (unformatted-output video-list)
     (if (>= (Integer/parseInt (get-env-var "COLUMNS")) wide-terminal-width)
-      (let [title-width (- (Integer/parseInt (get-env-var "COLUMNS")) youtube-link-width video-upload-time-width)]
-        (println (str/join "\n" (map #(three-column-format % title-width) video-list))))
+      (let [title-width (- (Integer/parseInt (get-env-var "COLUMNS")) youtube-link-width video-upload-time-width 4)]
+        (println (three-column-format video-list title-width)))
       (println (str/join "\n" (map single-column-format video-list))))))
 
+(defn print-help []
+  (println "Please provide a YouTube channel URL"))
 
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
-  (println "Hello, World!"))
+  (if (<= (count args) 0)
+    (print-help)
+    (let [channel-url (first args)
+          api-key (load-client-key client-key-file-name)
+          uploads-playlist (get-uploads-playlist-id api-key channel-url)
+          video-data (get-video-info-from-playlist api-key uploads-playlist)]
+      (print-video-info video-data))))
