@@ -157,5 +157,5 @@
     (let [channel-url (first args)
           api-key (load-client-key client-key-file-name)
           uploads-playlist (get-uploads-playlist-id api-key channel-url)
-          video-data (get-video-info-from-playlist api-key uploads-playlist)]
+          video-data (reverse (get-video-info-from-playlist api-key uploads-playlist))]
       (print-video-info video-data))))
