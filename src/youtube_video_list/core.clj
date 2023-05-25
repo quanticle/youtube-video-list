@@ -104,12 +104,13 @@
                                     words)]
     (map #(str/join " " %) (conj lines last-line))))
 
-(defn single-column-format [video-info]
+(defn single-column-format [video-list]
   "Output the video info in a single column, for narrow displays"
-  (format "%s\n%s\n%s"
-          (format "%1$TF %1$TT" (:upload-date video-info))
-          (:video-title video-info)
-          (format "https://youtu.be/%s" (:video-id video-info))))
+  (str/join "\n" (map (fn [video-info] (format "%s\n%s\n%s\n"
+                                              (format "%1$TF %1$TT" (:upload-date video-info))
+                                              (:video-title video-info)
+                                              (format "https://youtu.be/%s" (:video-id video-info))))
+                     video-list)))
 
 (defn three-column-format [video-list title-width]
   "Output the video info in a three column format for wider displays"
@@ -143,7 +144,7 @@
     (if (>= (Integer/parseInt (get-env-var "COLUMNS")) wide-terminal-width)
       (let [title-width (- (Integer/parseInt (get-env-var "COLUMNS")) youtube-link-width video-upload-time-width 4)]
         (println (three-column-format video-list title-width)))
-      (println (str/join "\n" (map single-column-format video-list))))))
+      (println (single-column-format video-list)))))
 
 (defn print-help []
   (println "Please provide a YouTube channel URL"))

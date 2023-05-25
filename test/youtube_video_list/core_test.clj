@@ -138,10 +138,10 @@
 
 (deftest test-single-column
   (testing "Single column display"
-    (is (= (single-column-format (map->video-info {:video-id "test_video_id"
-                                                   :video-title "Test video title"
-                                                   :upload-date (time/read-instant-date "2022-12-17T15:34:27Z")}))
-           (format "%s\n%s\n%s"
+    (is (= (single-column-format [(map->video-info {:video-id "test_video_id"
+                                                    :video-title "Test video title"
+                                                    :upload-date (time/read-instant-date "2022-12-17T15:34:27Z")})])
+           (format "%s\n%s\n%s\n"
                    (format "%1$TF %1$TT" (time/read-instant-date "2022-12-17T15:34:27Z"))
                    "Test video title"
                    "https://youtu.be/test_video_id")))))
