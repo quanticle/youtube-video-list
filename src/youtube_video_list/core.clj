@@ -5,6 +5,8 @@
             [clojure.data.json :as json]
             [clojure.instant :as time]
             [clojure.tools.cli :refer [parse-opts]])
+  (:import [java.time Duration]
+           [java.time.format DateTimeFormatter])
   (:gen-class))
 
 (def client-key-file-name "client-key")
@@ -92,6 +94,12 @@
           (into current-results (get-video-data response-data)))
         (throw (Exception. (str "Did not get a valid response from the YouTube API: " (:status http-response))))))))
 
+(defn parse-video-length
+  "Take an ISO-8601 duration string and turn it into a more-readable
+  hours:minutes:seconds format."
+  [video-length-str]
+  (let [duration (Duration/parse video-length-str)]
+    (format "%02d:%02d:%02d" (.toHoursPart duration) (.toMinutesPart duration) (.toSecondsPart duration))))
 (defn unformatted-output
   "Prints video info in a simple tab-delimited, newline separated format
    suitable for file output"

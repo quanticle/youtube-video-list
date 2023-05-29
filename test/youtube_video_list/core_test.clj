@@ -119,6 +119,14 @@
                                                        [{:nextPageToken "page-3" :data "data-2"}]
                                                        [{:data "data-3"}]]))))))
 
+(deftest test-parse-video-length
+  (testing "Less than one minute long"
+    (is (= (parse-video-length "PT36S") "00:00:36")))
+  (testing "Less than one hour long"
+    (is (= (parse-video-length "PT5M36S") "00:05:36")))
+  (testing "More than one hour long"
+    (is (= (parse-video-length "PT10H15M24S") "10:15:24"))))
+
 (deftest test-unformatted-output
   (testing "Test unformatted output"
     (with-mock mock-printf {:target :clojure.core/printf}
@@ -176,5 +184,5 @@
                                      (cond (= env-var "COLUMNS") "80"
                                            (= env-var "FILE_OUTPUT") "0"))}
                  mock-three-column-format {:target :youtube-video-list.core/three-column-format}]
-      (print-video-info ["test"])
+      (print-video-info ["test"] nil)
       (is (= (:call-args-list @mock-three-column-format) ['(["test"] 29)])))))
