@@ -3,13 +3,19 @@
             [clojure.string :as str]
             [clj-http.client :as http-client]
             [clojure.data.json :as json]
-            [clojure.instant :as time])
+            [clojure.instant :as time]
+            [clojure.tools.cli :refer [parse-opts]])
   (:gen-class))
 
 (def client-key-file-name "client-key")
 (def youtube-link-width 28)
 (def video-upload-time-width 19)
 (def wide-terminal-width 80)
+(def cli-options
+  [["-o" "--output TYPE" "Output type"
+    :required false
+    :default "multi"
+    :validate #{"multi" "single" "tsv"}]])
 
 (defrecord video-info [upload-date video-title video-id])
 
@@ -152,10 +158,4 @@
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
-  (if (<= (count args) 0)
-    (print-help)
-    (let [channel-url (first args)
-          api-key (load-client-key client-key-file-name)
-          uploads-playlist (get-uploads-playlist-id api-key channel-url)
-          video-data (reverse (get-video-info-from-playlist api-key uploads-playlist))]
-      (print-video-info video-data))))
+  (let [parsed-options (parse-opts args cli-options)]))

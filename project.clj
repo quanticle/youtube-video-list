@@ -6,7 +6,8 @@
   :dependencies [[org.clojure/clojure "1.11.1"]
                  [clj-http "3.12.3"]
                  [mockery "0.1.4"]
-                 [org.clojure/data.json "2.4.0"]]
+                 [org.clojure/data.json "2.4.0"]
+                 [org.clojure/tools.cli "1.0.219"]]
   :main ^:skip-aot youtube-video-list.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all
