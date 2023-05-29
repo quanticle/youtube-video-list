@@ -17,19 +17,21 @@
     :default "multi"
     :validate #{"multi" "single" "tsv"}]])
 
-(defrecord video-info [upload-date video-title video-id])
+(defrecord video-info [upload-date video-title video-id duration])
 
-(defn load-client-key [file-name]
-  "Loads the client key from the given file. The file is assumed to have just 
+(defn load-client-key
+  "Loads the client key from the given file. The file is assumed to have just
    the API key, with a possible trailing newline."
+  [file-name]
   (str/trim (slurp (io/resource file-name))))
 
-(defn get-uploads-playlist-id [api-key channel-url]
-  "Get the ID of the playlist representing the full list of uploaded video for 
+(defn get-uploads-playlist-id
+  "Get the ID of the playlist representing the full list of uploaded video for
    the given channel. The channel URL can either be one that contains a user ID
    (i.e. https://www.youtube.com/user/nismotv2013/videos) or, one that contains
-   the channel ID (i.e. 
+   the channel ID (i.e.
    https://www.youtube.com/channel/UCy0tKL1T7wFoYcxCe0xjN6Q/videos)"
+  [api-key channel-url]
   (let [channel-id (re-find #"/channel/([^/]+)/?" channel-url)
         user-id (re-find #"/user/([^/]+)/?" channel-url)
         query-params (cond
@@ -39,7 +41,7 @@
                        user-id {:key api-key
                                 :forUsername (user-id 1)
                                 :part "contentDetails"}
-                       :else (throw (Exception. 
+                       :else (throw (Exception.
                                      (str "Could not determine either user ID or channel ID from " channel-url))))
         http-response (http-client/get
                        "https://www.googleapis.com/youtube/v3/channels"
@@ -56,16 +58,18 @@
           :uploads)
       (throw (Exception. (str "Did not get a valid HTTP response from the YouTube API: " (:status http-response)))))))
 
-(defn get-video-data [playlist-items-response]
+(defn get-video-data
   "Extracts the fields we're interested in (video title, upload date and video
    ID) from the PlaylistItems API response"
+  [playlist-items-response]
   (map #(map->video-info {:video-title (get-in % [:snippet :title])
                           :video-id (get-in % [:contentDetails :videoId])
                           :upload-date (time/read-instant-date (get-in % [:contentDetails :videoPublishedAt]))})
        (:items playlist-items-response)))
 
-(defn get-video-info-from-playlist [api-key playlist-id]
+(defn get-video-info-from-playlist
   "Gets a list of all the videos from the given playlist ID"
+  [api-key playlist-id]
   (loop [current-results []
          next-page-token nil]
     (let [http-response (http-client/get
@@ -88,9 +92,10 @@
           (into current-results (get-video-data response-data)))
         (throw (Exception. (str "Did not get a valid response from the YouTube API: " (:status http-response))))))))
 
-(defn unformatted-output [video-info]
+(defn unformatted-output
   "Prints video info in a simple tab-delimited, newline separated format
    suitable for file output"
+  [video-info]
   (dorun (map (fn [vid]
                 (printf "%s\t%s\t%s\n"
                         (format "%1$TF %1$TT" (:upload-date vid))
@@ -98,9 +103,10 @@
                         (format "https://youtu.be/%s" (:video-id vid))))
               video-info)))
 
-(defn split-video-title [title max-width]
-  "Splits the title string into a number of strings, each of which is shorter 
+(defn split-video-title
+  "Splits the title string into a number of strings, each of which is shorter
    than max width"
+  [title max-width]
   (let [words (str/split title #" ")
         [lines last-line _] (reduce (fn [[lines cur-line cur-line-len] next-word]
                                       (if (> (+ cur-line-len 1 (count next-word)) max-width)
@@ -110,23 +116,25 @@
                                     words)]
     (map #(str/join " " %) (conj lines last-line))))
 
-(defn single-column-format [video-list]
+(defn single-column-format
   "Output the video info in a single column, for narrow displays"
+  [video-list]
   (str/join "\n" (map (fn [video-info] (format "%s\n%s\n%s\n"
                                               (format "%1$TF %1$TT" (:upload-date video-info))
                                               (:video-title video-info)
                                               (format "https://youtu.be/%s" (:video-id video-info))))
                      video-list)))
 
-(defn three-column-format [video-list title-width]
+(defn three-column-format
   "Output the video info in a three column format for wider displays"
+  [video-list title-width]
   (let [split-titles (map #(split-video-title (:video-title %) title-width) video-list)
         max-title-line-width (apply max (flatten (map #(map count %) split-titles)))
-        format-string (format "%%-%ds  %%-%ds  %%-%ds" 
+        format-string (format "%%-%ds  %%-%ds  %%-%ds"
                               video-upload-time-width
                               max-title-line-width
                               youtube-link-width)]
-    (str/join "\n" (map (fn [video-info] 
+    (str/join "\n" (map (fn [video-info]
                           (let [split-title (split-video-title (:video-title video-info) title-width)
                                 first-line (format format-string
                                                    (format "%1$TF %1$TT" (:upload-date video-info))
@@ -137,14 +145,18 @@
                             (str/join "\n" (concat [first-line] remaining-lines))))
                         video-list))))
 
-(defn get-env-var [var-name]
+(defn get-env-var
   "Simple wrapper function around System/getenv. This makes it easier to mock
    calls to System/getenv in unit tests."
+  [var-name]
   (System/getenv var-name))
 
-(defn print-video-info [video-list]
-  "Prints the video info to STDOUT. Relies on the wrapper script to handle the 
-   istty() call to determine if the output is going to a terminal."
+(defn print-video-info
+  "Prints the video info to STDOUT. OUTPUT-TYPE specifies the format in which
+   the output is written. A value of MULTI specifies the multi-column format.
+   SINGLE specifies the single-column format. TSV specifies the TSV format
+   (suitable for redirecting into a file)."
+  [video-list output-type]
   (if (= (Integer/parseInt (get-env-var "FILE_OUTPUT")) 1)
     (unformatted-output video-list)
     (if (>= (Integer/parseInt (get-env-var "COLUMNS")) wide-terminal-width)
