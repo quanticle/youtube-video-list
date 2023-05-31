@@ -1,5 +1,6 @@
 (ns youtube-video-list.core-test
   (:require [clojure.test :refer :all]
+            [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.instant :as time]
             [clojure.string :as str]
@@ -126,6 +127,35 @@
     (is (= (parse-video-length "PT5M36S") "00:05:36")))
   (testing "More than one hour long"
     (is (= (parse-video-length "PT10H15M24S") "10:15:24"))))
+
+(deftest test-get-video-length-for-partition
+  (testing "Get video durations"
+    (let [mock-parse-video-lengths-result (atom ["duration 1" "duration 2"])]
+      (with-mocks [mock-http {:target :clj-http.client/get
+                              :return {:status 200
+                                       :body (json/json-str {:items [{:id "test-id-1"
+                                                                      :contentDetails {:duration "test-duration-1"}}
+                                                                     {:id "test-id-2"
+                                                                      :contentDetails {:duration "test-duration-2"}}]}
+                                                            :key-fn name)}}
+                   mock-parse-video-length {:target :youtube-video-list.core/parse-video-length
+                                            :return (fn [& _] (first (first (swap-vals! mock-parse-video-lengths-result rest))))}]
+        (let [get-durations-result (get-video-length-for-partition "mock api key"
+                                                                   [(->video-info "test upload date 1" "test video title 1" "test video id 1" nil)
+                                                                    (->video-info "test upload date 2" "test video title 2" "test video id 2" nil)])]
+          (is (= [{:id "test-id-1"
+                   :duration "duration 1"}
+                  {:id "test-id-2"
+                   :duration "duration 2"}]
+                 @get-durations-result))
+          (is (= ["https://www.googleapis.com/youtube/v3/videos"
+                  {:accept :json
+                   :key "mock api key"
+                   :id "test video id 1,test video id 2"
+                   :part "id,contentDetails"}]
+                 (:call-args @mock-http)))
+          (is (= [["test-duration-1"] ["test-duration-2"]]
+                 (:call-args-list @mock-parse-video-length))))))))
 
 (deftest test-unformatted-output
   (testing "Test unformatted output"

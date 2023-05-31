@@ -100,6 +100,35 @@
   [video-length-str]
   (let [duration (Duration/parse video-length-str)]
     (format "%02d:%02d:%02d" (.toHoursPart duration) (.toMinutesPart duration) (.toSecondsPart duration))))
+
+(defn get-video-length-for-partition
+  "Launch a future to get video info for a single partition of (up to) 50 videos"
+  [api-key video-info-partition]
+  (let [video-ids (map #(:video-id %) video-info-partition)]
+    (future
+      (let [http-response (http-client/get
+                           "https://www.googleapis.com/youtube/v3/videos"
+                           {:accept :json
+                            :key api-key
+                            :id (str/join "," video-ids)
+                            :part "id,contentDetails"})
+            response-data (if (= (:status http-response) 200)
+                            (json/read-str (:body http-response) :key-fn keyword))]
+        (map (fn [video-details]
+               {:id (:id video-details)
+                :duration (parse-video-length (get-in video-details [:contentDetails :duration]))})
+             (:items response-data))))))
+
+(defn get-all-video-lengths
+  "Get the video lengths for all the videos in a playlis and set the duration
+   field of the video record."
+  [api-key video-infos]
+  (let [video-info-partitions (partition-all 50 video-infos)
+        video-info-map (apply hash-map (flatten (map #(vector (:video-id %) (atom %)) video-infos)))
+        video-lengths (flatten (map #(deref (get-video-length-for-partition %)) video-info-partitions))]
+    (dorun (map (fn [video-length-info]
+                  (swap! (video-info-map (:id video-length-info)) assoc :duration (:duration video-length-info)))))))
+
 (defn unformatted-output
   "Prints video info in a simple tab-delimited, newline separated format
    suitable for file output"
