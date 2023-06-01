@@ -5,7 +5,8 @@
             [clojure.instant :as time]
             [clojure.string :as str]
             [mockery.core :refer :all]
-            [youtube-video-list.core :refer :all]))
+            [youtube-video-list.core :refer :all])
+  (:import [java.time Period LocalDate]))
 
 (deftest test-get-uploads-playlist-id
   (testing "Get uploads playlist for username"
@@ -150,12 +151,37 @@
                  @get-durations-result))
           (is (= ["https://www.googleapis.com/youtube/v3/videos"
                   {:accept :json
-                   :key "mock api key"
-                   :id "test video id 1,test video id 2"
-                   :part "id,contentDetails"}]
+                   :query-params {:key "mock api key"
+                                  :id "test video id 1,test video id 2"
+                                  :part "id,contentDetails"}}]
                  (:call-args @mock-http)))
           (is (= [["test-duration-1"] ["test-duration-2"]]
                  (:call-args-list @mock-parse-video-length))))))))
+
+(defn generate-video-data
+  "Returns a lazy-seq of videos with random data whose upload date starts with
+   the given date and increments by one day per video"
+  ([n ^LocalDate upload-date]
+   (lazy-seq (cons (map->video-info {:upload-date upload-date
+                                     :video-id (format "test-id-%d" n)
+                                     :video-title (format "Test Title %d" n)})
+                   (generate-video-data (inc n) (.plus upload-date (Period/ofDays 1))))))
+  ([^LocalDate upload-date]
+   (generate-video-data 1 upload-date)))
+
+(deftest test-get-all-video-lengths
+  (testing "Get all video lengths, one partition"
+    (let [mock-api-key "mock-api-key"
+          video-data (take 20 (generate-video-data (LocalDate/parse "2023-06-02")))]
+      (with-mock mock-get-video-length-for-partition {:target :youtube-video-list.core/get-video-length-for-partition
+                                                      :return (future (map #(hash-map :id (:video-id %) :duration "00:01:00") video-data))}
+        (let [video-data-with-durations (get-all-video-lengths mock-api-key video-data)]
+          (is (true? (every? #(= (:duration %) "00:01:00") video-data-with-durations)))
+          (is (= [mock-api-key video-data] (:call-args @mock-get-video-length-for-partition)))))))
+  (testing "Get all video lengths, multiple partitions"
+    (let [mock-api-key "mock-api-key"
+          video-data (take 100 (generate-video-data (LocalDate/parse "2023-06-02")))]
+      ))) ;;TODO finish this
 
 (deftest test-unformatted-output
   (testing "Test unformatted output"

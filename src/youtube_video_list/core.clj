@@ -109,9 +109,9 @@
       (let [http-response (http-client/get
                            "https://www.googleapis.com/youtube/v3/videos"
                            {:accept :json
-                            :key api-key
-                            :id (str/join "," video-ids)
-                            :part "id,contentDetails"})
+                            :query-params {:key api-key
+                                           :id (str/join "," video-ids)
+                                           :part "id,contentDetails"}})
             response-data (if (= (:status http-response) 200)
                             (json/read-str (:body http-response) :key-fn keyword))]
         (map (fn [video-details]
@@ -120,14 +120,16 @@
              (:items response-data))))))
 
 (defn get-all-video-lengths
-  "Get the video lengths for all the videos in a playlis and set the duration
+  "Get the video lengths for all the videos in a playlist and set the duration
    field of the video record."
   [api-key video-infos]
   (let [video-info-partitions (partition-all 50 video-infos)
         video-info-map (apply hash-map (flatten (map #(vector (:video-id %) (atom %)) video-infos)))
-        video-lengths (flatten (map #(deref (get-video-length-for-partition %)) video-info-partitions))]
+        video-lengths (flatten (map #(deref (get-video-length-for-partition api-key %)) video-info-partitions))]
     (dorun (map (fn [video-length-info]
-                  (swap! (video-info-map (:id video-length-info)) assoc :duration (:duration video-length-info)))))))
+                  (swap! (video-info-map (:id video-length-info)) assoc :duration (:duration video-length-info)))
+                video-lengths))
+    (sort-by :upload-date (map deref (vals video-info-map)))))
 
 (defn unformatted-output
   "Prints video info in a simple tab-delimited, newline separated format
