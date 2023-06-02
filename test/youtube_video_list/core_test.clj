@@ -180,8 +180,18 @@
           (is (= [mock-api-key video-data] (:call-args @mock-get-video-length-for-partition)))))))
   (testing "Get all video lengths, multiple partitions"
     (let [mock-api-key "mock-api-key"
-          video-data (take 100 (generate-video-data (LocalDate/parse "2023-06-02")))]
-      ))) ;;TODO finish this
+          video-data (take 100 (generate-video-data (LocalDate/parse "2023-06-02")))
+          video-lengths (atom ["00:01:00" "00:02:00"])]
+      (with-mock mock-get-video-length-for-partition {:target :youtube-video-list.core/get-video-length-for-partition
+                                                      :return (fn [_ video-data]
+                                                                (let [video-length (first (first (swap-vals! video-lengths rest)))]
+                                                                  (future (map #(hash-map :id (:video-id %) :duration video-length) video-data))))}
+        (let [video-data-with-durations-partitioned (partition-all 50 (get-all-video-lengths mock-api-key video-data))]
+          (is (true? (every? #(= (:duration %) "00:01:00") (first video-data-with-durations-partitioned))))
+          (is (true? (every? #(= (:duration %) "00:02:00") (second video-data-with-durations-partitioned))))
+          (is (= [[mock-api-key (take 50 video-data)]
+                  [mock-api-key (take 50 (drop 50 video-data))]]
+                 (:call-args-list @mock-get-video-length-for-partition))))))))
 
 (deftest test-unformatted-output
   (testing "Test unformatted output"
