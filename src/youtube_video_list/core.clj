@@ -126,10 +126,10 @@
   (let [video-info-partitions (partition-all 50 video-infos)
         video-info-map (apply hash-map (flatten (map #(vector (:video-id %) (atom %)) video-infos)))
         video-lengths (flatten (map #(deref (get-video-length-for-partition api-key %)) video-info-partitions))]
-    (dorun (map (fn [video-length-info]
-                  (swap! (video-info-map (:id video-length-info)) assoc :duration (:duration video-length-info)))
-                video-lengths))
-    (sort-by :upload-date (map deref (vals video-info-map)))))
+    (sort-by :upload-date
+             (into [] (map (fn [video-length]
+                             (assoc @(video-info-map (:id video-length)) :duration (:duration video-length))))
+                   video-lengths))))
 
 (defn unformatted-output
   "Prints video info in a simple tab-delimited, newline separated format
