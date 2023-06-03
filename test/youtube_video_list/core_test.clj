@@ -8,6 +8,63 @@
             [youtube-video-list.core :refer :all])
   (:import [java.time Period LocalDate]))
 
+(deftest test-get-channel-ids-from-search-response
+  (testing "Get channel IDs from search response"
+    (is (= ["UC6jZ3uNWJKtJokkJxPLA88g" "UCvZC2hMobpo-FOYY6cfgOZg"] 
+           (get-channel-ids-from-search-response {:body (slurp (io/resource "search_list_output.txt"))})))))
+
+(deftest test-get-custom-urls-from-channel-response
+  (testing "Get custom URLs from channel response, all channels have custom URLs"
+    (is (= [{:id "UCvZC2hMobpo-FOYY6cfgOZg" :customUrl "@flamuclips"}
+            {:id "UC6jZ3uNWJKtJokkJxPLA88g" :customUrl "@flamuu"}]
+           (get-custom-urls-from-channel-data {:body (slurp (io/resource "channels_list_output_allCustomUrls.txt"))}))))
+  (testing "Get custom URLs from channel response, some channels don't have custom URLs"
+    (is (= [{:id "UCvZC2hMobpo-FOYY6cfgOZg" :customUrl nil}
+            {:id "UC6jZ3uNWJKtJokkJxPLA88g" :customUrl "@flamuu"}]
+           (get-custom-urls-from-channel-data {:body (slurp (io/resource "channels_list_output_missingCustomUrl.txt"))})))))
+
+(deftest test-get-channel-id-for-custom-url
+  (let [mock-valid-http-response {:status 200
+                                  :body "Valid response"}
+        mock-invalid-http-response {:status 400
+                                    :body "Oh no! An error!"}]
+    (testing "Get channel ID for custom URL, no errors"
+      (with-mocks [mock-http {:target :clj-http.client/get
+                              :return mock-valid-http-response}
+                   mock-get-channel-ids-from-search-response {:target :youtube-video-list.core/get-channel-ids-from-search-response
+                                                              :return ["test_channel_id_1" "test_channel_id_2"]}
+                   mock-get-custom-urls-from-channel-data {:target :youtube-video-list.core/get-custom-urls-from-channel-data
+                                                           :return [{:id "test_channel_id_1" :customUrl "@custom_url_1"}
+                                                                    {:id "test_channel_id_2" :customUrl "@custom_url_2"}]}]
+        (is (= "test_channel_id_1" (get-channel-id-for-custom-url "mock-api-key" "Custom_Url_1")))
+        (is (= [mock-valid-http-response] (:call-args @mock-get-channel-ids-from-search-response)))
+        (is (= [mock-valid-http-response] (:call-args @mock-get-custom-urls-from-channel-data)))
+        (is (= [["https://www.googleapis.com/youtube/v3/search" 
+                 {:accept :json
+                  :query-params {:key "mock-api-key"
+                                 :q "@custom_url_1"
+                                 :part "snippet"
+                                 :maxResults 50
+                                 :order "relevance"
+                                 :type "channel"}}]
+                ["https://www.googleapis.com/youtube/v3/channels"
+                 {:accept :json
+                  :query-params {:key "mock-api-key"
+                                 :id "test_channel_id_1,test_channel_id_2"
+                                 :part "snippet"}}]]
+               (:call-args-list @mock-http)))))
+    (testing "Get channel ID for custom URL, channel ID not found"
+      (with-mocks [mock-http {:target :clj-http.client/get
+                              :return mock-valid-http-response}
+                   mock-get-channel-ids-from-search-response {:target :youtube-video-list.core/get-channel-ids-from-search-response
+                                                              :return ["test_channel_id_1" "test_channel_id_2"]}
+                   mock-get-custom-urls-from-channel-data {:target :youtube-video-list.core/get-custom-urls-from-channel-data
+                                                           :return [{:id "test_channel_id_1" :customUrl "@custom_url_3"}
+                                                                    {:id "test_channel_id_2" :customUrl "@custom_url_4"}]}]
+        (is (= nil (get-channel-id-for-custom-url "mock-api-key" "custom_url_1")))
+        (is (= [mock-valid-http-response] (:call-args @mock-get-channel-ids-from-search-response)))
+        (is (= [mock-valid-http-response] (:call-args @mock-get-custom-urls-from-channel-data)))))))
+
 (deftest test-get-uploads-playlist-id
   (testing "Get uploads playlist for username"
     (with-mock mock-http
@@ -35,6 +92,21 @@
                               :key "test-api-key"
                               :id "UCoSrY_IQQVpmIRZ9Xf-y93g"
                               :part "contentDetails"}}]))))
+  (testing "Get uploads playlist for custom URL"
+    (with-mocks [mock-get-channel-id-for-custom-url {:target :youtube-video-list.core/get-channel-id-for-custom-url
+                                                     :return "UCoSrY_IQQVpmIRZ9Xf-y93g"}
+                 mock-http {:target :clj-http.client/get
+                            :return {:body (slurp (io/resource "channels_channelId_output.txt"))
+                                     :status 200}}]
+      (is (= "UUoSrY_IQQVpmIRZ9Xf-y93g" (get-uploads-playlist-id "test-api-key" "https://www.youtube.com/c/Flamuu")))
+      (is (= ["https://www.googleapis.com/youtube/v3/channels"
+              {:accept :json
+               :query-params {
+                              :key "test-api-key"
+                              :id "UCoSrY_IQQVpmIRZ9Xf-y93g"
+                              :part "contentDetails"}}]
+             (:call-args @mock-http)))
+      (is (= ["test-api-key" "Flamuu"] (:call-args @mock-get-channel-id-for-custom-url)))))
   (testing "Invalid URL"
     (is (thrown-with-msg? Exception #"Could not determine" (get-uploads-playlist-id "test-api-key" "https://www.google.com")))))
 
@@ -175,7 +247,7 @@
           video-data (take 20 (generate-video-data (LocalDate/parse "2023-06-02")))]
       (with-mock mock-get-video-length-for-partition {:target :youtube-video-list.core/get-video-length-for-partition
                                                       :return (future (map #(hash-map :id (:video-id %) :duration "00:01:00") video-data))}
-        (let [video-data-with-durations (get-all-video-lengths mock-api-key video-data)]
+        (let [video-data-with-durations (set-video-lengths mock-api-key video-data)]
           (is (true? (every? #(= (:duration %) "00:01:00") video-data-with-durations)))
           (is (= [mock-api-key video-data] (:call-args @mock-get-video-length-for-partition)))))))
   (testing "Get all video lengths, multiple partitions"
@@ -186,69 +258,60 @@
                                                       :return (fn [_ video-data]
                                                                 (let [video-length (first (first (swap-vals! video-lengths rest)))]
                                                                   (future (map #(hash-map :id (:video-id %) :duration video-length) video-data))))}
-        (let [video-data-with-durations-partitioned (partition-all 50 (get-all-video-lengths mock-api-key video-data))]
+        (let [video-data-with-durations-partitioned (partition-all 50 (set-video-lengths mock-api-key video-data))]
           (is (true? (every? #(= (:duration %) "00:01:00") (first video-data-with-durations-partitioned))))
           (is (true? (every? #(= (:duration %) "00:02:00") (second video-data-with-durations-partitioned))))
           (is (= [[mock-api-key (take 50 video-data)]
                   [mock-api-key (take 50 (drop 50 video-data))]]
                  (:call-args-list @mock-get-video-length-for-partition))))))))
 
-(deftest test-unformatted-output
-  (testing "Test unformatted output"
+(deftest test-tsv-output
+  (testing "Test tsv output"
     (with-mock mock-printf {:target :clojure.core/printf}
-      (unformatted-output [{:video-id "vid_id_1"
-                            :video-title "Vid Title 1"
-                            :upload-date (time/read-instant-date "2022-12-23T17:32:25Z")}
-                           {:video-id "vid_id_2"
-                            :video-title "Vid Title 2"
-                            :upload-date (time/read-instant-date "2022-12-11T11:43:17Z")}])
-      (is (= (:call-args-list @mock-printf)
-             [["%s\t%s\t%s\n" (format "%1$TF %1$TT" (time/read-instant-date "2022-12-23T17:32:25Z")) "Vid Title 1" "https://youtu.be/vid_id_1"]
-              ["%s\t%s\t%s\n" (format "%1$TF %1$TT" (time/read-instant-date "2022-12-11T11:43:17Z")) "Vid Title 2" "https://youtu.be/vid_id_2"]])))))
-
-(deftest test-split-video-title
-  (testing "Split video title"
-    (is (= (split-video-title "The quick brown fox jumps over the lazy dog" 20) ["The quick brown fox" "jumps over the lazy" "dog"]))))
+      (is (= (str/join "\n" [(format "%s\t%s\t%s\t%s"
+                                     (format "%1$TF %1$TT" (time/read-instant-date "2022-12-23T17:32:25Z"))
+                                     "Vid Title 1"
+                                     "00:01:00"
+                                     "https://youtu.be/vid_id_1")
+                             (format "%s\t%s\t%s\t%s"
+                                     (format "%1$TF %1$TT" (time/read-instant-date "2022-12-11T11:43:17Z"))
+                                     "Vid Title 2"
+                                     "00:02:00"
+                                     "https://youtu.be/vid_id_2")])
+           (tsv-format [{:video-id "vid_id_1"
+                         :video-title "Vid Title 1"
+                         :upload-date (time/read-instant-date "2022-12-23T17:32:25Z")
+                         :duration "00:01:00"}
+                        {:video-id "vid_id_2"
+                         :video-title "Vid Title 2"
+                         :upload-date (time/read-instant-date "2022-12-11T11:43:17Z")
+                         :duration "00:02:00"}]))))))
 
 (deftest test-single-column
   (testing "Single column display"
-    (is (= (single-column-format [(map->video-info {:video-id "test_video_id"
-                                                    :video-title "Test video title"
-                                                    :upload-date (time/read-instant-date "2022-12-17T15:34:27Z")})])
-           (format "%s\n%s\n%s\n"
-                   (format "%1$TF %1$TT" (time/read-instant-date "2022-12-17T15:34:27Z"))
+    (is (= (format "Video Title:\t%s\nUpload date:\t%s\nVideo Length:\t%s\nVideo URL:\t%s\n"
                    "Test video title"
-                   "https://youtu.be/test_video_id")))))
+                   (format "%1$TF %1$TT" (time/read-instant-date "2022-12-17T15:34:27Z"))
+                   "00:01:00"
+                   "https://youtu.be/test_video_id")
+           (single-column-format [(map->video-info {:video-id "test_video_id"
+                                                    :video-title "Test video title"
+                                                    :upload-date (time/read-instant-date "2022-12-17T15:34:27Z")
+                                                    :duration "00:01:00"})])))))
 
-(deftest test-three-column
-  (testing "Three column output"
-    (is (= (three-column-format [(map->video-info {:video-id "test_video_id"
-                                                   :video-title "The quick brown fox jumps over the lazy dog"
-                                                   :upload-date (time/read-instant-date "2022-12-17T17:43:45Z")})]
-                                20)
-           (str/join "\n"
-            [(format "%s  %-19s  %s"
-                    (format "%1$TF %1TT" (time/read-instant-date "2022-12-17T17:43:45Z"))
-                    "The quick brown fox"
-                    "https://youtu.be/test_video_id")
-             (format "%19s  %-19s  %28s" " " "jumps over the lazy" " ")
-             (format "%19s  %-19s  %28s" " " "dog" " ")]))))
-  (testing "Three column output, max width adequate"
-    (is (= (three-column-format [(map->video-info {:video-id "test_video_id"
-                                                   :video-title "The quick brown fox jumps over the lazy dog"
-                                                   :upload-date (time/read-instant-date "2022-12-17T17:43:45Z")})]
-                                80)
-           (format "%s  %s  %s"
-                   (format "%1$TF %1$TT" (time/read-instant-date "2022-12-17T17:43:45Z"))
-                   "The quick brown fox jumps over the lazy dog"
-                   "https://youtu.be/test_video_id")))))
-
-(deftest test-print-video-info
-  (testing "Verify that print-video-info accesses the correct environment variables"
-    (with-mocks [mock-env {:target :youtube-video-list.core/get-env-var
-                           :return (fn [env-var]
-                                     (cond (= env-var "COLUMNS") "80"
-                                           (= env-var "FILE_OUTPUT") "0"))}
-                 mock-three-column-format {:target :youtube-video-list.core/three-column-format}]
-      (print-video-info ["test"] nil)
-      (is (= (:call-args-list @mock-three-column-format) ['(["test"] 29)])))))
+(deftest test-validation
+  (testing "No URL supplied"
+    (is (= {:error "Must specify a channel URL"}
+           (validate-args []))))
+  (testing "Invalid output format"
+    (is (= {:error "Failed to validate \"-o invalid\": Output type must be either \"screen\" or \"tsv\" if specified."}
+           (validate-args ["-o" "invalid" "test-url"]))))
+  (testing "Invalid option"
+    (is (= {:error "Unknown option: \"-t\""}
+           (validate-args ["-t" "invalid" "test-url"]))))
+  (testing "Valid arguments, no output type specified"
+    (is (= {:url "test url" :output-type :screen}
+           (validate-args ["test url"]))))
+  (testing "Valid arguments, output type specified"
+    (is (= {:url "test url" :output-type :tsv}
+           (validate-args ["-o" "tsv" "test url"])))))

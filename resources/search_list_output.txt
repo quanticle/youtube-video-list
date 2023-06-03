@@ -1,0 +1,67 @@
+{
+  "kind": "youtube#searchListResponse",
+  "etag": "n31kYznqcmEhH820pbdiL50htis",
+  "regionCode": "US",
+  "pageInfo": {
+    "totalResults": 3,
+    "resultsPerPage": 2
+  },
+  "items": [
+    {
+      "kind": "youtube#searchResult",
+      "etag": "3yP9gGZifUPJ_wJabdcy-Pj9lsQ",
+      "id": {
+        "kind": "youtube#channel",
+        "channelId": "UC6jZ3uNWJKtJokkJxPLA88g"
+      },
+      "snippet": {
+        "publishedAt": "2007-08-17T00:17:10Z",
+        "channelId": "UC6jZ3uNWJKtJokkJxPLA88g",
+        "title": "Flamu",
+        "description": "Want to become a better player? My goal is to help you, with a combination of analyzing my own games and some rather rough ...",
+        "thumbnails": {
+          "default": {
+            "url": "https://yt3.ggpht.com/ytc/AGIKgqPLwATw_zCxmc5pNo23eReKaRPJr9XnonD2KnPHsw=s88-c-k-c0xffffffff-no-rj-mo"
+          },
+          "medium": {
+            "url": "https://yt3.ggpht.com/ytc/AGIKgqPLwATw_zCxmc5pNo23eReKaRPJr9XnonD2KnPHsw=s240-c-k-c0xffffffff-no-rj-mo"
+          },
+          "high": {
+            "url": "https://yt3.ggpht.com/ytc/AGIKgqPLwATw_zCxmc5pNo23eReKaRPJr9XnonD2KnPHsw=s800-c-k-c0xffffffff-no-rj-mo"
+          }
+        },
+        "channelTitle": "Flamu",
+        "liveBroadcastContent": "none",
+        "publishTime": "2007-08-17T00:17:10Z"
+      }
+    },
+    {
+      "kind": "youtube#searchResult",
+      "etag": "PrzfdVVio_712kJLP4BgSXoD9yk",
+      "id": {
+        "kind": "youtube#channel",
+        "channelId": "UCvZC2hMobpo-FOYY6cfgOZg"
+      },
+      "snippet": {
+        "publishedAt": "2022-01-05T09:56:30Z",
+        "channelId": "UCvZC2hMobpo-FOYY6cfgOZg",
+        "title": "Flamu Clips",
+        "description": "I am not Flamu. I am a 3rd party with permission from Flamu to post clips. I do not represent Flamu. He is not responsible for ...",
+        "thumbnails": {
+          "default": {
+            "url": "https://yt3.ggpht.com/PpswsTXahfcb_MfIdX4psvwTOTtvIM47mythTMqblQAzDsP92wu-fmPPo8AS8l8TLgK8-3Kg=s88-c-k-c0xffffffff-no-rj-mo"
+          },
+          "medium": {
+            "url": "https://yt3.ggpht.com/PpswsTXahfcb_MfIdX4psvwTOTtvIM47mythTMqblQAzDsP92wu-fmPPo8AS8l8TLgK8-3Kg=s240-c-k-c0xffffffff-no-rj-mo"
+          },
+          "high": {
+            "url": "https://yt3.ggpht.com/PpswsTXahfcb_MfIdX4psvwTOTtvIM47mythTMqblQAzDsP92wu-fmPPo8AS8l8TLgK8-3Kg=s800-c-k-c0xffffffff-no-rj-mo"
+          }
+        },
+        "channelTitle": "Flamu Clips",
+        "liveBroadcastContent": "none",
+        "publishTime": "2022-01-05T09:56:30Z"
+      }
+    }
+  ]
+}

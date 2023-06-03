@@ -6,18 +6,19 @@
             [clojure.instant :as time]
             [clojure.tools.cli :refer [parse-opts]])
   (:import [java.time Duration]
-           [java.time.format DateTimeFormatter])
+           [java.time.format DateTimeFormatter]
+           [java.text Normalizer Normalizer$Form])
   (:gen-class))
 
 (def client-key-file-name "client-key")
 (def youtube-link-width 28)
 (def video-upload-time-width 19)
-(def wide-terminal-width 80)
+(def video-duration-width 8)
 (def cli-options
-  [["-o" "--output TYPE" "Output type"
-    :required false
-    :default "multi"
-    :validate #{"multi" "single" "tsv"}]])
+  [["-o" "--output-type TYPE" "Output Type"
+    :parse-fn keyword
+    :default :screen
+    :validate [#{:screen :tsv} "Output type must be either \"screen\" or \"tsv\" if specified."]]])
 
 (defrecord video-info [upload-date video-title video-id duration])
 
@@ -27,6 +28,96 @@
   [file-name]
   (str/trim (slurp (io/resource file-name))))
 
+(defn get-channel-ids-from-search-response
+  "Gets the channel IDs from a search response. Used as part of retrieving the
+   channel ID for a custom URL.
+
+   See also: GET-CHANNEL-ID-FOR-CUSTOM-URL"
+  [search-response]
+  (map (fn [search-result-item]
+         (-> search-result-item
+             :snippet
+             :channelId))
+       (-> search-response
+             :body
+             (json/read-str :key-fn keyword)
+             :items)))
+
+(defn get-custom-urls-from-channel-data
+  "Gets the custom URLs from the channel info response. Used as part of
+   retrieving the channel ID for a custom URL. Returns a sequence of hashmaps,
+   where each map has an :ID field, with the channel ID, and a :CUSTOM-URL field
+   with the custom URL. If the channel does not have a custom URL, :CUSTOM-URL
+   will be NIL."
+  [channels-response]
+  (map (fn [channel-result-item]
+         {:id (:id channel-result-item)
+          :customUrl (-> channel-result-item
+                         :snippet
+                         :customUrl)})
+       (-> channels-response
+           :body
+           (json/read-str :key-fn keyword)
+           :items)))
+
+(defn get-channel-id-for-custom-url
+  "I hate that this function has to exist. Ideally, the YouTube channels API
+   would allow the caller to search by custom URL, just as it allows for
+   searching by user ID or channel ID. But no, there's no direct way to retrieve
+   the channel ID if all you have is a custom URL.
+
+   Instead, what you need to do is *search* for the custom name, *pray* that the
+   channel you want comes back in the first page of results (prayer is left as 
+   an exercise for the reader), then query the channel API with the IDs of the
+   channels returned by the search. Channels with custom URLs will have a
+   :customUrl parameter inside the :snippet.
+
+   Okay, so all we have to do is write a simple filter function that compares
+   the values of :customUrl against the value of the custom URL, right? Hahaha
+   no. Did you really think that Google would make it this easy? The value of
+   :customUrl is of the format \"@name\", all lowercase. But when a custom URL
+   shows up in the address bar, it's capitalized and doesn't have the @
+   prepended. So, for example: https://www.youtube.com/c/Flamuu translates to
+   a :customUrl value of \"@flamuu\". So before we can compare, we need to make
+   sure to lowercase the URL value and prepend it with \"@\".
+
+   In conclusion: can I have some of whatever it was the designers and
+   implementers of this API were smoking?
+
+   References:
+   - https://stackoverflow.com/questions/37267324#65218781
+   - https://issuetracker.google.com/issues/174903934?pli=1"
+  [api-key custom-url]
+  (let [custom-url-api-version (format "@%s" (str/lower-case custom-url))
+        search-response (http-client/get "https://www.googleapis.com/youtube/v3/search"
+                                         {:accept :json
+                                          :query-params {:key api-key
+                                                         :q custom-url-api-version
+                                                         :part "snippet"
+                                                         :maxResults 50
+                                                         :order "relevance"
+                                                         :type "channel"}})]
+    (if (= (:status search-response) 200)
+      (let [channel-ids (get-channel-ids-from-search-response search-response)
+            channel-data-response (http-client/get "https://www.googleapis.com/youtube/v3/channels"
+                                                   {:accept :json
+                                                    :query-params {:key api-key
+                                                                   :id (str/join "," channel-ids)
+                                                                   :part "snippet"}})]
+        (if (= (:status channel-data-response) 200)
+          (->> channel-data-response
+               get-custom-urls-from-channel-data
+               (filter #(= custom-url-api-version (:customUrl %)))
+               first
+               :id)
+          (throw (Exception. (format "Error retrieving custom URLs for channels: %d\n%s" 
+                                     (:status channel-data-response)
+                                     (:body channel-data-response))))))
+      (throw (Exception. (format "Error searching for channels for the given custom URL: %s: %d\n%s"
+                                 custom-url-api-version
+                                 (:status search-response)
+                                 (:body search-response)))))))
+
 (defn get-uploads-playlist-id
   "Get the ID of the playlist representing the full list of uploaded video for
    the given channel. The channel URL can either be one that contains a user ID
@@ -34,8 +125,11 @@
    the channel ID (i.e.
    https://www.youtube.com/channel/UCy0tKL1T7wFoYcxCe0xjN6Q/videos)"
   [api-key channel-url]
-  (let [channel-id (re-find #"/channel/([^/]+)/?" channel-url)
-        user-id (re-find #"/user/([^/]+)/?" channel-url)
+  (let [user-id (re-find #"/user/([^/]+)/?" channel-url)
+        custom-url (re-find #"/c/([^/]+)/?" channel-url)
+        channel-id (if custom-url
+                     [nil (get-channel-id-for-custom-url api-key (custom-url 1))]
+                     (re-find #"/channel/([^/]+)/?" channel-url))
         query-params (cond
                        channel-id {:key api-key
                                    :id (channel-id 1)
@@ -119,7 +213,7 @@
                 :duration (parse-video-length (get-in video-details [:contentDetails :duration]))})
              (:items response-data))))))
 
-(defn get-all-video-lengths
+(defn set-video-lengths
   "Get the video lengths for all the videos in a playlist and set the duration
    field of the video record."
   [api-key video-infos]
@@ -131,82 +225,77 @@
                              (assoc @(video-info-map (:id video-length)) :duration (:duration video-length))))
                    video-lengths))))
 
-(defn unformatted-output
+(defn tsv-format
   "Prints video info in a simple tab-delimited, newline separated format
    suitable for file output"
   [video-info]
-  (dorun (map (fn [vid]
-                (printf "%s\t%s\t%s\n"
-                        (format "%1$TF %1$TT" (:upload-date vid))
-                        (:video-title vid)
-                        (format "https://youtu.be/%s" (:video-id vid))))
-              video-info)))
-
-(defn split-video-title
-  "Splits the title string into a number of strings, each of which is shorter
-   than max width"
-  [title max-width]
-  (let [words (str/split title #" ")
-        [lines last-line _] (reduce (fn [[lines cur-line cur-line-len] next-word]
-                                      (if (> (+ cur-line-len 1 (count next-word)) max-width)
-                                        [(conj lines cur-line) [next-word] (count next-word)]
-                                        [lines (conj cur-line next-word) (+ cur-line-len (count next-word) 1)]))
-                                    [[] [] 0]
-                                    words)]
-    (map #(str/join " " %) (conj lines last-line))))
+  (str/join "\n" (map (fn [vid]
+                        (format "%s\t%s\t%s\t%s"
+                                (format "%1$TF %1$TT" (:upload-date vid))
+                                (:video-title vid)
+                                (:duration vid)
+                                (format "https://youtu.be/%s" (:video-id vid))))
+                      video-info)))
 
 (defn single-column-format
-  "Output the video info in a single column, for narrow displays"
+  "Output the video info in a single column, for screen output"
   [video-list]
-  (str/join "\n" (map (fn [video-info] (format "%s\n%s\n%s\n"
-                                              (format "%1$TF %1$TT" (:upload-date video-info))
-                                              (:video-title video-info)
-                                              (format "https://youtu.be/%s" (:video-id video-info))))
+  (str/join "\n" (map (fn [video-info] (format "Video Title:\t%s\nUpload date:\t%s\nVideo Length:\t%s\nVideo URL:\t%s\n"
+                                               (:video-title video-info)
+                                               (format "%1$TF %1$TT" (:upload-date video-info))
+                                               (:duration video-info)
+                                               (format "https://youtu.be/%s" (:video-id video-info))))
                      video-list)))
 
-(defn three-column-format
-  "Output the video info in a three column format for wider displays"
-  [video-list title-width]
-  (let [split-titles (map #(split-video-title (:video-title %) title-width) video-list)
-        max-title-line-width (apply max (flatten (map #(map count %) split-titles)))
-        format-string (format "%%-%ds  %%-%ds  %%-%ds"
-                              video-upload-time-width
-                              max-title-line-width
-                              youtube-link-width)]
-    (str/join "\n" (map (fn [video-info]
-                          (let [split-title (split-video-title (:video-title video-info) title-width)
-                                first-line (format format-string
-                                                   (format "%1$TF %1$TT" (:upload-date video-info))
-                                                   (first split-title)
-                                                   (format "https://youtu.be/%s" (:video-id video-info)))
-                                remaining-lines (map #(format format-string " " % " ")
-                                                     (rest split-title))]
-                            (str/join "\n" (concat [first-line] remaining-lines))))
-                        video-list))))
-
-(defn get-env-var
-  "Simple wrapper function around System/getenv. This makes it easier to mock
-   calls to System/getenv in unit tests."
-  [var-name]
-  (System/getenv var-name))
 
 (defn print-video-info
-  "Prints the video info to STDOUT. OUTPUT-TYPE specifies the format in which
-   the output is written. A value of MULTI specifies the multi-column format.
-   SINGLE specifies the single-column format. TSV specifies the TSV format
-   (suitable for redirecting into a file)."
+  "Prints video info to STDOUT with PRINTLN. If OUTPUT-TYPE is :SCREEN, print
+   the video data in single column format. If OUTPUT-TYPE is :TSV, print the
+   video data in tab-separated format. OUTPUT-TYPE is guaranteed by the
+   validation code to be one of :SCREEN or :TSV."
   [video-list output-type]
-  (if (= (Integer/parseInt (get-env-var "FILE_OUTPUT")) 1)
-    (unformatted-output video-list)
-    (if (>= (Integer/parseInt (get-env-var "COLUMNS")) wide-terminal-width)
-      (let [title-width (- (Integer/parseInt (get-env-var "COLUMNS")) youtube-link-width video-upload-time-width 4)]
-        (println (three-column-format video-list title-width)))
-      (println (single-column-format video-list)))))
+  (case output-type
+    :screen (println (single-column-format video-list))
+    :tsv (println (tsv-format video-list))))
 
-(defn print-help []
-  (println "Please provide a YouTube channel URL"))
+(defn print-help-and-error 
+  "Prints the error message and a short usage summary."
+  [error]
+  (println error)
+  (println "Usage: java -jar youtube-video-list-0.1.0-SNAPSHOT-standalone.jar [-o OUTPUT-TYPE] <youtube channel URL>")
+  (println "OUTPUT-TYPE may be one of \"screen\" or \"tsv\". If \"screen\" the program will list the videos from the channel. If \"tsv\" the program will output video information in TSV format, suitable for writing to a file.")
+  (println "By default OUTPUT-TYPE is \"screen\"."))
+
+(defn validate-args 
+  "Validates command line arguments."
+  [args]
+  (let [parsed-options (parse-opts args cli-options)]
+    (cond 
+      (> 1 (count (:arguments parsed-options))) {:error "Must specify a channel URL"}
+      (:errors parsed-options) {:error (first (:errors parsed-options))}
+      :else {:url (first (:arguments parsed-options))
+             :output-type (:output-type (:options parsed-options))})))
+
+(defn get-videos-from-youtube-channel 
+  "The actual entry point for the program. When testing from the REPL, call this
+   instead of -MAIN."
+  [& args]
+  (let [validation-result (validate-args args)]
+    (if (:error validation-result)
+      (print-help-and-error (:error validation-result))
+      (let [api-key (load-client-key client-key-file-name)
+            channel-url (:url validation-result)
+            uploads-playlist-id (get-uploads-playlist-id api-key channel-url)
+            video-data (set-video-lengths api-key (get-video-info-from-playlist api-key uploads-playlist-id))]
+        (print-video-info video-data (:output-type validation-result))))))
 
 (defn -main
-  "I don't do a whole lot ... yet."
+  "Stub entry point for command-line usage. DO NOT call this from the REPL, as
+   the (shutdown-agents) shuts down all background threads, including the ones
+   that are required for nREPL to communicate with emacs.
+
+   See also: https://clojure.atlassian.net/browse/CLJ-124 for why the
+   (shutdown-agents) call is necessary."
   [& args]
-  (let [parsed-options (parse-opts args cli-options)]))
+  (apply get-videos-from-youtube-channel args)
+  (shutdown-agents))
