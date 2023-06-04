@@ -2,13 +2,10 @@
 cd "$(dirname $0)"
 if [ -t 1 ] ;
 then
-    export FILE_OUTPUT=0
-    export COLUMNS=$(tput cols)
+    java -jar youtube-video-list-0.1.0-SNAPSHOT-standalone.jar $1
 else
-    export FILE_OUTPUT=1
+    java -jar youtube-video-list-0.1.0-SNAPSHOT-standalone.jar -o tsv $1
 fi
-
-java -jar youtube-video-list-0.1.0-SNAPSHOT-standalone.jar $1
 
 
 
