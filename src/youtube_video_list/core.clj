@@ -234,7 +234,7 @@
                                 (format "%1$TF %1$TT" (:upload-date vid))
                                 (:video-title vid)
                                 (:duration vid)
-                                (format "https://youtu.be/%s" (:video-id vid))))
+                                (format "https://www.youtube.com/watch?v=%s" (:video-id vid))))
                       video-info)))
 
 (defn single-column-format
@@ -244,7 +244,7 @@
                                                (:video-title video-info)
                                                (format "%1$TF %1$TT" (:upload-date video-info))
                                                (:duration video-info)
-                                               (format "https://youtu.be/%s" (:video-id video-info))))
+                                               (format "https://www.youtube.com/watch?v=%s" (:video-id video-info))))
                      video-list)))
 
 

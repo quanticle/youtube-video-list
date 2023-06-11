@@ -272,12 +272,12 @@
                                      (format "%1$TF %1$TT" (time/read-instant-date "2022-12-23T17:32:25Z"))
                                      "Vid Title 1"
                                      "00:01:00"
-                                     "https://youtu.be/vid_id_1")
+                                     "https://www.youtube.com/watch?v=vid_id_1")
                              (format "%s\t%s\t%s\t%s"
                                      (format "%1$TF %1$TT" (time/read-instant-date "2022-12-11T11:43:17Z"))
                                      "Vid Title 2"
                                      "00:02:00"
-                                     "https://youtu.be/vid_id_2")])
+                                     "https://www.youtube.com/watch?v=vid_id_2")])
            (tsv-format [{:video-id "vid_id_1"
                          :video-title "Vid Title 1"
                          :upload-date (time/read-instant-date "2022-12-23T17:32:25Z")
@@ -293,7 +293,7 @@
                    "Test video title"
                    (format "%1$TF %1$TT" (time/read-instant-date "2022-12-17T15:34:27Z"))
                    "00:01:00"
-                   "https://youtu.be/test_video_id")
+                   "https://www.youtube.com/watch?v=test_video_id")
            (single-column-format [(map->video-info {:video-id "test_video_id"
                                                     :video-title "Test video title"
                                                     :upload-date (time/read-instant-date "2022-12-17T15:34:27Z")
