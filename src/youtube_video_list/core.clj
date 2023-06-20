@@ -126,7 +126,8 @@
    https://www.youtube.com/channel/UCy0tKL1T7wFoYcxCe0xjN6Q/videos)"
   [api-key channel-url]
   (let [user-id (re-find #"/user/([^/]+)/?" channel-url)
-        custom-url (re-find #"/c/([^/]+)/?" channel-url)
+        custom-url (or (re-find #"/c/([^/]+)/?" channel-url)
+                       (re-find #"/@([^@]+)/?" channel-url))
         channel-id (if custom-url
                      [nil (get-channel-id-for-custom-url api-key (custom-url 1))]
                      (re-find #"/channel/([^/]+)/?" channel-url))

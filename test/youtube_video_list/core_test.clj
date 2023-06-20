@@ -107,6 +107,21 @@
                               :part "contentDetails"}}]
              (:call-args @mock-http)))
       (is (= ["test-api-key" "Flamuu"] (:call-args @mock-get-channel-id-for-custom-url)))))
+  (testing "Get uploads playlist for Twitter-style URL"
+    (with-mocks [mock-get-channel-id-for-custom-url {:target :youtube-video-list.core/get-channel-id-for-custom-url
+                                                     :return "UCoSrY_IQQVpmIRZ9Xf-y93g"}
+                 mock-http {:target :clj-http.client/get
+                            :return {:body (slurp (io/resource "channels_channelId_output.txt"))
+                                     :status 200}}]
+      (is (= "UUoSrY_IQQVpmIRZ9Xf-y93g" (get-uploads-playlist-id "test-api-key" "https://www.youtube.com/@Flamuu")))
+      (is (= ["https://www.googleapis.com/youtube/v3/channels"
+              {:accept :json
+               :query-params {
+                              :key "test-api-key"
+                              :id "UCoSrY_IQQVpmIRZ9Xf-y93g"
+                              :part "contentDetails"}}]
+             (:call-args @mock-http)))
+      (is (= ["test-api-key" "Flamuu"] (:call-args @mock-get-channel-id-for-custom-url)))))
   (testing "Invalid URL"
     (is (thrown-with-msg? Exception #"Could not determine" (get-uploads-playlist-id "test-api-key" "https://www.google.com")))))
 
