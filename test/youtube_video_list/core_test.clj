@@ -224,7 +224,9 @@
                                        :body (json/json-str {:items [{:id "test-id-1"
                                                                       :contentDetails {:duration "test-duration-1"}}
                                                                      {:id "test-id-2"
-                                                                      :contentDetails {:duration "test-duration-2"}}]}
+                                                                      :contentDetails {:duration "test-duration-2"}}
+                                                                     {:id "test-id-3"
+                                                                      :contentDetails {:foo "bar"}}]}
                                                             :key-fn name)}}
                    mock-parse-video-length {:target :youtube-video-list.core/parse-video-length
                                             :return (fn [& _] (first (first (swap-vals! mock-parse-video-lengths-result rest))))}]

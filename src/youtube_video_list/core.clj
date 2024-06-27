@@ -212,7 +212,7 @@
         (map (fn [video-details]
                {:id (:id video-details)
                 :duration (parse-video-length (get-in video-details [:contentDetails :duration]))})
-             (:items response-data))))))
+             (filter #(get-in % [:contentDetails :duration] false) (:items response-data)))))))
 
 (defn set-video-lengths
   "Get the video lengths for all the videos in a playlist and set the duration
