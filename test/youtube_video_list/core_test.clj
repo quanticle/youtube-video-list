@@ -8,62 +8,6 @@
             [youtube-video-list.core :refer :all])
   (:import [java.time Period LocalDate]))
 
-(deftest test-get-channel-ids-from-search-response
-  (testing "Get channel IDs from search response"
-    (is (= ["UC6jZ3uNWJKtJokkJxPLA88g" "UCvZC2hMobpo-FOYY6cfgOZg"] 
-           (get-channel-ids-from-search-response {:body (slurp (io/resource "search_list_output.txt"))})))))
-
-(deftest test-get-custom-urls-from-channel-response
-  (testing "Get custom URLs from channel response, all channels have custom URLs"
-    (is (= [{:id "UCvZC2hMobpo-FOYY6cfgOZg" :customUrl "@flamuclips"}
-            {:id "UC6jZ3uNWJKtJokkJxPLA88g" :customUrl "@flamuu"}]
-           (get-custom-urls-from-channel-data {:body (slurp (io/resource "channels_list_output_allCustomUrls.txt"))}))))
-  (testing "Get custom URLs from channel response, some channels don't have custom URLs"
-    (is (= [{:id "UCvZC2hMobpo-FOYY6cfgOZg" :customUrl nil}
-            {:id "UC6jZ3uNWJKtJokkJxPLA88g" :customUrl "@flamuu"}]
-           (get-custom-urls-from-channel-data {:body (slurp (io/resource "channels_list_output_missingCustomUrl.txt"))})))))
-
-(deftest test-get-channel-id-for-custom-url
-  (let [mock-valid-http-response {:status 200
-                                  :body "Valid response"}
-        mock-invalid-http-response {:status 400
-                                    :body "Oh no! An error!"}]
-    (testing "Get channel ID for custom URL, no errors"
-      (with-mocks [mock-http {:target :clj-http.client/get
-                              :return mock-valid-http-response}
-                   mock-get-channel-ids-from-search-response {:target :youtube-video-list.core/get-channel-ids-from-search-response
-                                                              :return ["test_channel_id_1" "test_channel_id_2"]}
-                   mock-get-custom-urls-from-channel-data {:target :youtube-video-list.core/get-custom-urls-from-channel-data
-                                                           :return [{:id "test_channel_id_1" :customUrl "@custom_url_1"}
-                                                                    {:id "test_channel_id_2" :customUrl "@custom_url_2"}]}]
-        (is (= "test_channel_id_1" (get-channel-id-for-custom-url "mock-api-key" "Custom_Url_1")))
-        (is (= [mock-valid-http-response] (:call-args @mock-get-channel-ids-from-search-response)))
-        (is (= [mock-valid-http-response] (:call-args @mock-get-custom-urls-from-channel-data)))
-        (is (= [["https://www.googleapis.com/youtube/v3/search" 
-                 {:accept :json
-                  :query-params {:key "mock-api-key"
-                                 :q "@custom_url_1"
-                                 :part "snippet"
-                                 :maxResults 50
-                                 :order "relevance"
-                                 :type "channel"}}]
-                ["https://www.googleapis.com/youtube/v3/channels"
-                 {:accept :json
-                  :query-params {:key "mock-api-key"
-                                 :id "test_channel_id_1,test_channel_id_2"
-                                 :part "snippet"}}]]
-               (:call-args-list @mock-http)))))
-    (testing "Get channel ID for custom URL, channel ID not found"
-      (with-mocks [mock-http {:target :clj-http.client/get
-                              :return mock-valid-http-response}
-                   mock-get-channel-ids-from-search-response {:target :youtube-video-list.core/get-channel-ids-from-search-response
-                                                              :return ["test_channel_id_1" "test_channel_id_2"]}
-                   mock-get-custom-urls-from-channel-data {:target :youtube-video-list.core/get-custom-urls-from-channel-data
-                                                           :return [{:id "test_channel_id_1" :customUrl "@custom_url_3"}
-                                                                    {:id "test_channel_id_2" :customUrl "@custom_url_4"}]}]
-        (is (= nil (get-channel-id-for-custom-url "mock-api-key" "custom_url_1")))
-        (is (= [mock-valid-http-response] (:call-args @mock-get-channel-ids-from-search-response)))
-        (is (= [mock-valid-http-response] (:call-args @mock-get-custom-urls-from-channel-data)))))))
 
 (deftest test-get-uploads-playlist-id
   (testing "Get uploads playlist for username"
@@ -93,9 +37,7 @@
                               :id "UCoSrY_IQQVpmIRZ9Xf-y93g"
                               :part "contentDetails"}}]))))
   (testing "Get uploads playlist for custom URL"
-    (with-mocks [mock-get-channel-id-for-custom-url {:target :youtube-video-list.core/get-channel-id-for-custom-url
-                                                     :return "UCoSrY_IQQVpmIRZ9Xf-y93g"}
-                 mock-http {:target :clj-http.client/get
+    (with-mocks [mock-http {:target :clj-http.client/get
                             :return {:body (slurp (io/resource "channels_channelId_output.txt"))
                                      :status 200}}]
       (is (= "UUoSrY_IQQVpmIRZ9Xf-y93g" (get-uploads-playlist-id "test-api-key" "https://www.youtube.com/c/Flamuu")))
@@ -103,14 +45,11 @@
               {:accept :json
                :query-params {
                               :key "test-api-key"
-                              :id "UCoSrY_IQQVpmIRZ9Xf-y93g"
+                              :forHandle "Flamuu"
                               :part "contentDetails"}}]
-             (:call-args @mock-http)))
-      (is (= ["test-api-key" "Flamuu"] (:call-args @mock-get-channel-id-for-custom-url)))))
+             (:call-args @mock-http)))))
   (testing "Get uploads playlist for Twitter-style URL"
-    (with-mocks [mock-get-channel-id-for-custom-url {:target :youtube-video-list.core/get-channel-id-for-custom-url
-                                                     :return "UCoSrY_IQQVpmIRZ9Xf-y93g"}
-                 mock-http {:target :clj-http.client/get
+    (with-mocks [mock-http {:target :clj-http.client/get
                             :return {:body (slurp (io/resource "channels_channelId_output.txt"))
                                      :status 200}}]
       (is (= "UUoSrY_IQQVpmIRZ9Xf-y93g" (get-uploads-playlist-id "test-api-key" "https://www.youtube.com/@Flamuu")))
@@ -118,10 +57,9 @@
               {:accept :json
                :query-params {
                               :key "test-api-key"
-                              :id "UCoSrY_IQQVpmIRZ9Xf-y93g"
+                              :forHandle "Flamuu"
                               :part "contentDetails"}}]
-             (:call-args @mock-http)))
-      (is (= ["test-api-key" "Flamuu"] (:call-args @mock-get-channel-id-for-custom-url)))))
+             (:call-args @mock-http)))))
   (testing "Invalid URL"
     (is (thrown-with-msg? Exception #"Could not determine" (get-uploads-playlist-id "test-api-key" "https://www.google.com")))))
 

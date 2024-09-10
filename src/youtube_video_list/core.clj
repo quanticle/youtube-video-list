@@ -28,95 +28,6 @@
   [file-name]
   (str/trim (slurp (io/resource file-name))))
 
-(defn get-channel-ids-from-search-response
-  "Gets the channel IDs from a search response. Used as part of retrieving the
-   channel ID for a custom URL.
-
-   See also: GET-CHANNEL-ID-FOR-CUSTOM-URL"
-  [search-response]
-  (map (fn [search-result-item]
-         (-> search-result-item
-             :snippet
-             :channelId))
-       (-> search-response
-             :body
-             (json/read-str :key-fn keyword)
-             :items)))
-
-(defn get-custom-urls-from-channel-data
-  "Gets the custom URLs from the channel info response. Used as part of
-   retrieving the channel ID for a custom URL. Returns a sequence of hashmaps,
-   where each map has an :ID field, with the channel ID, and a :CUSTOM-URL field
-   with the custom URL. If the channel does not have a custom URL, :CUSTOM-URL
-   will be NIL."
-  [channels-response]
-  (map (fn [channel-result-item]
-         {:id (:id channel-result-item)
-          :customUrl (-> channel-result-item
-                         :snippet
-                         :customUrl)})
-       (-> channels-response
-           :body
-           (json/read-str :key-fn keyword)
-           :items)))
-
-(defn get-channel-id-for-custom-url
-  "I hate that this function has to exist. Ideally, the YouTube channels API
-   would allow the caller to search by custom URL, just as it allows for
-   searching by user ID or channel ID. But no, there's no direct way to retrieve
-   the channel ID if all you have is a custom URL.
-
-   Instead, what you need to do is *search* for the custom name, *pray* that the
-   channel you want comes back in the first page of results (prayer is left as 
-   an exercise for the reader), then query the channel API with the IDs of the
-   channels returned by the search. Channels with custom URLs will have a
-   :customUrl parameter inside the :snippet.
-
-   Okay, so all we have to do is write a simple filter function that compares
-   the values of :customUrl against the value of the custom URL, right? Hahaha
-   no. Did you really think that Google would make it this easy? The value of
-   :customUrl is of the format \"@name\", all lowercase. But when a custom URL
-   shows up in the address bar, it's capitalized and doesn't have the @
-   prepended. So, for example: https://www.youtube.com/c/Flamuu translates to
-   a :customUrl value of \"@flamuu\". So before we can compare, we need to make
-   sure to lowercase the URL value and prepend it with \"@\".
-
-   In conclusion: can I have some of whatever it was the designers and
-   implementers of this API were smoking?
-
-   References:
-   - https://stackoverflow.com/questions/37267324#65218781
-   - https://issuetracker.google.com/issues/174903934?pli=1"
-  [api-key custom-url]
-  (let [custom-url-api-version (format "@%s" (str/lower-case custom-url))
-        search-response (http-client/get "https://www.googleapis.com/youtube/v3/search"
-                                         {:accept :json
-                                          :query-params {:key api-key
-                                                         :q custom-url-api-version
-                                                         :part "snippet"
-                                                         :maxResults 50
-                                                         :order "relevance"
-                                                         :type "channel"}})]
-    (if (= (:status search-response) 200)
-      (let [channel-ids (get-channel-ids-from-search-response search-response)
-            channel-data-response (http-client/get "https://www.googleapis.com/youtube/v3/channels"
-                                                   {:accept :json
-                                                    :query-params {:key api-key
-                                                                   :id (str/join "," channel-ids)
-                                                                   :part "snippet"}})]
-        (if (= (:status channel-data-response) 200)
-          (->> channel-data-response
-               get-custom-urls-from-channel-data
-               (filter #(= custom-url-api-version (:customUrl %)))
-               first
-               :id)
-          (throw (Exception. (format "Error retrieving custom URLs for channels: %d\n%s" 
-                                     (:status channel-data-response)
-                                     (:body channel-data-response))))))
-      (throw (Exception. (format "Error searching for channels for the given custom URL: %s: %d\n%s"
-                                 custom-url-api-version
-                                 (:status search-response)
-                                 (:body search-response)))))))
 
 (defn get-uploads-playlist-id
   "Get the ID of the playlist representing the full list of uploaded video for
@@ -128,9 +39,7 @@
   (let [user-id (re-find #"/user/([^/]+)/?" channel-url)
         custom-url (or (re-find #"/c/([^/]+)/?" channel-url)
                        (re-find #"/@([^@]+)/?" channel-url))
-        channel-id (if custom-url
-                     [nil (get-channel-id-for-custom-url api-key (custom-url 1))]
-                     (re-find #"/channel/([^/]+)/?" channel-url))
+        channel-id (re-find #"/channel/([^/]+)/?" channel-url)
         query-params (cond
                        channel-id {:key api-key
                                    :id (channel-id 1)
@@ -138,6 +47,9 @@
                        user-id {:key api-key
                                 :forUsername (user-id 1)
                                 :part "contentDetails"}
+                       custom-url {:key api-key
+                                   :forHandle (custom-url 1)
+                                   :part "contentDetails"}
                        :else (throw (Exception.
                                      (str "Could not determine either user ID or channel ID from " channel-url))))
         http-response (http-client/get
