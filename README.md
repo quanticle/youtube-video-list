@@ -29,10 +29,6 @@ To run:
 
     $ java -jar youtube-video-list-0.1.0-standalone.jar "https://www.youtube.com/c/SpaceX"
 
-### Bugs
-
-I need to handle YouTube URLs of the form `https://www.youtube.com/@<channel>`.
-
 ## License
 
     Copyright (C) 2023  Rohit Patnaik

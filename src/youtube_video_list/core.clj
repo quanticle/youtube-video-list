@@ -108,7 +108,7 @@
   (let [duration (Duration/parse video-length-str)]
     (format "%02d:%02d:%02d" (.toHoursPart duration) (.toMinutesPart duration) (.toSecondsPart duration))))
 
-(defn get-video-length-for-partition
+(defn extract-video-info-from-partition
   "Launch a future to get video info for a single partition of (up to) 50 videos"
   [api-key video-info-partition]
   (let [video-ids (map #(:video-id %) video-info-partition)]
@@ -118,12 +118,13 @@
                            {:accept :json
                             :query-params {:key api-key
                                            :id (str/join "," video-ids)
-                                           :part "id,contentDetails"}})
+                                           :part "id,snippet,contentDetails,localizations"}})
             response-data (if (= (:status http-response) 200)
                             (json/read-str (:body http-response) :key-fn keyword))]
         (map (fn [video-details]
                {:id (:id video-details)
-                :duration (parse-video-length (get-in video-details [:contentDetails :duration]))})
+                :duration (parse-video-length (get-in video-details [:contentDetails :duration]))
+                :title (or (get-in video-details [:localizations :en :title]) (get-in video-details [:snippet :title]))})
              (filter #(get-in % [:contentDetails :duration] false) (:items response-data)))))))
 
 (defn set-video-lengths
@@ -132,11 +133,13 @@
   [api-key video-infos]
   (let [video-info-partitions (partition-all 50 video-infos)
         video-info-map (apply hash-map (flatten (map #(vector (:video-id %) (atom %)) video-infos)))
-        video-lengths (flatten (map #(deref (get-video-length-for-partition api-key %)) video-info-partitions))]
+        extracted-video-infos (flatten (map #(deref (extract-video-info-from-partition api-key %)) video-info-partitions))]
     (sort-by :upload-date
-             (into [] (map (fn [video-length]
-                             (assoc @(video-info-map (:id video-length)) :duration (:duration video-length))))
-                   video-lengths))))
+             (into [] (map (fn [extracted-video-data]
+                             (assoc @(video-info-map (:id extracted-video-data)) 
+                                    :duration (:duration extracted-video-data)
+                                    :video-title (:title extracted-video-data))))
+                   extracted-video-infos))))
 
 (defn tsv-format
   "Prints video info in a simple tab-delimited, newline separated format

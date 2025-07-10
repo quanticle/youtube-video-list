@@ -4,8 +4,10 @@
             [clojure.java.io :as io]
             [clojure.instant :as time]
             [clojure.string :as str]
+            [clojure.pprint :as pprint]
             [mockery.core :refer :all]
-            [youtube-video-list.core :refer :all])
+            [youtube-video-list.core :refer :all]
+            [clj-http.client :as http-client])
   (:import [java.time Period LocalDate]))
 
 
@@ -154,33 +156,38 @@
   (testing "More than one hour long"
     (is (= (parse-video-length "PT10H15M24S") "10:15:24"))))
 
-(deftest test-get-video-length-for-partition
+(deftest test-extract-video-info-from-partition
   (testing "Get video durations"
     (let [mock-parse-video-lengths-result (atom ["duration 1" "duration 2"])]
       (with-mocks [mock-http {:target :clj-http.client/get
                               :return {:status 200
                                        :body (json/json-str {:items [{:id "test-id-1"
-                                                                      :contentDetails {:duration "test-duration-1"}}
+                                                                      :contentDetails {:duration "test-duration-1"}
+                                                                      :snippet {:title "Test Title 1"}}
                                                                      {:id "test-id-2"
-                                                                      :contentDetails {:duration "test-duration-2"}}
+                                                                      :contentDetails {:duration "test-duration-2"}
+                                                                      :snippet {:title "Test Title in a different language"}
+                                                                      :localizations {:en {:title "Test English Title"}}}
                                                                      {:id "test-id-3"
                                                                       :contentDetails {:foo "bar"}}]}
                                                             :key-fn name)}}
                    mock-parse-video-length {:target :youtube-video-list.core/parse-video-length
                                             :return (fn [& _] (first (first (swap-vals! mock-parse-video-lengths-result rest))))}]
-        (let [get-durations-result (get-video-length-for-partition "mock api key"
+        (let [get-durations-result (extract-video-info-from-partition "mock api key"
                                                                    [(->video-info "test upload date 1" "test video title 1" "test video id 1" nil)
                                                                     (->video-info "test upload date 2" "test video title 2" "test video id 2" nil)])]
           (is (= [{:id "test-id-1"
-                   :duration "duration 1"}
+                   :duration "duration 1"
+                   :title "Test Title 1"}
                   {:id "test-id-2"
-                   :duration "duration 2"}]
+                   :duration "duration 2"
+                   :title "Test English Title"}]
                  @get-durations-result))
           (is (= ["https://www.googleapis.com/youtube/v3/videos"
                   {:accept :json
                    :query-params {:key "mock api key"
                                   :id "test video id 1,test video id 2"
-                                  :part "id,contentDetails"}}]
+                                  :part "id,snippet,contentDetails,localizations"}}]
                  (:call-args @mock-http)))
           (is (= [["test-duration-1"] ["test-duration-2"]]
                  (:call-args-list @mock-parse-video-length))))))))
@@ -200,7 +207,7 @@
   (testing "Get all video lengths, one partition"
     (let [mock-api-key "mock-api-key"
           video-data (take 20 (generate-video-data (LocalDate/parse "2023-06-02")))]
-      (with-mock mock-get-video-length-for-partition {:target :youtube-video-list.core/get-video-length-for-partition
+      (with-mock mock-get-video-length-for-partition {:target :youtube-video-list.core/extract-video-info-from-partition
                                                       :return (future (map #(hash-map :id (:video-id %) :duration "00:01:00") video-data))}
         (let [video-data-with-durations (set-video-lengths mock-api-key video-data)]
           (is (true? (every? #(= (:duration %) "00:01:00") video-data-with-durations)))
@@ -209,7 +216,7 @@
     (let [mock-api-key "mock-api-key"
           video-data (take 100 (generate-video-data (LocalDate/parse "2023-06-02")))
           video-lengths (atom ["00:01:00" "00:02:00"])]
-      (with-mock mock-get-video-length-for-partition {:target :youtube-video-list.core/get-video-length-for-partition
+      (with-mock mock-get-video-length-for-partition {:target :youtube-video-list.core/extract-video-info-from-partition
                                                       :return (fn [_ video-data]
                                                                 (let [video-length (first (first (swap-vals! video-lengths rest)))]
                                                                   (future (map #(hash-map :id (:video-id %) :duration video-length) video-data))))}
@@ -270,3 +277,20 @@
   (testing "Valid arguments, output type specified"
     (is (= {:url "test url" :output-type :tsv}
            (validate-args ["-o" "tsv" "test url"])))))
+
+;; Debugging scratchpad functions
+;; These are normally commented out
+
+#_(defn live-get-video-info
+  "Get info for a single YouTube video"
+  [video-id]
+  (let [api-key (load-client-key client-key-file-name)
+        http-response (http-client/get "https://www.googleapis.com/youtube/v3/videos"
+                                       {:accept :json
+                                        :query-params {:key api-key
+                                                       :id video-id
+                                                       :part "id,snippet,contentDetails,localizations"}})
+        response-data (if (= (:status http-response) 200)
+                        (json/read-str (:body http-response) :key-fn keyword))]
+    (or (get-in (first (:items response-data)) [:localizations :en :title]) (get-in (first (:items response-data)) [:snippet :title]))))
+
