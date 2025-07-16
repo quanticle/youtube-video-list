@@ -158,7 +158,7 @@
 
 (deftest test-extract-video-info-from-partition
   (testing "Get video durations"
-    (let [mock-parse-video-lengths-result (atom ["duration 1" "duration 2"])]
+    (let [mock-parse-video-lengths-result (atom ["duration 1" "duration 2" "duration 3"])]
       (with-mocks [mock-http {:target :clj-http.client/get
                               :return {:status 200
                                        :body (json/json-str {:items [{:id "test-id-1"
@@ -169,27 +169,35 @@
                                                                       :snippet {:title "Test Title in a different language"}
                                                                       :localizations {:en {:title "Test English Title"}}}
                                                                      {:id "test-id-3"
+                                                                      :contentDetails {:duration "test-duration-3"}
+                                                                      :snippet {:title "Test title in a different language"}
+                                                                      :localizations {:en-US {:title "Test English Title 2"}}}
+                                                                     {:id "test-id-4"
                                                                       :contentDetails {:foo "bar"}}]}
                                                             :key-fn name)}}
                    mock-parse-video-length {:target :youtube-video-list.core/parse-video-length
                                             :return (fn [& _] (first (first (swap-vals! mock-parse-video-lengths-result rest))))}]
         (let [get-durations-result (extract-video-info-from-partition "mock api key"
                                                                    [(->video-info "test upload date 1" "test video title 1" "test video id 1" nil)
-                                                                    (->video-info "test upload date 2" "test video title 2" "test video id 2" nil)])]
+                                                                    (->video-info "test upload date 2" "test video title 2" "test video id 2" nil)
+                                                                    (->video-info "test upload date 3" "test video title 3" "test video id 3" nil)])]
           (is (= [{:id "test-id-1"
                    :duration "duration 1"
                    :title "Test Title 1"}
                   {:id "test-id-2"
                    :duration "duration 2"
-                   :title "Test English Title"}]
+                   :title "Test English Title"}
+                  {:id "test-id-3"
+                   :duration "duration 3"
+                   :title "Test English Title 2"}]
                  @get-durations-result))
           (is (= ["https://www.googleapis.com/youtube/v3/videos"
                   {:accept :json
                    :query-params {:key "mock api key"
-                                  :id "test video id 1,test video id 2"
+                                  :id "test video id 1,test video id 2,test video id 3"
                                   :part "id,snippet,contentDetails,localizations"}}]
                  (:call-args @mock-http)))
-          (is (= [["test-duration-1"] ["test-duration-2"]]
+          (is (= [["test-duration-1"] ["test-duration-2"] ["test-duration-3"]]
                  (:call-args-list @mock-parse-video-length))))))))
 
 (defn generate-video-data
@@ -281,7 +289,7 @@
 ;; Debugging scratchpad functions
 ;; These are normally commented out
 
-#_(defn live-get-video-info
+(defn live-get-video-info
   "Get info for a single YouTube video"
   [video-id]
   (let [api-key (load-client-key client-key-file-name)
@@ -292,5 +300,6 @@
                                                        :part "id,snippet,contentDetails,localizations"}})
         response-data (if (= (:status http-response) 200)
                         (json/read-str (:body http-response) :key-fn keyword))]
+    (pprint/pprint response-data)
     (or (get-in (first (:items response-data)) [:localizations :en :title]) (get-in (first (:items response-data)) [:snippet :title]))))
 

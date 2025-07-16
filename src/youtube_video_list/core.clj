@@ -124,7 +124,9 @@
         (map (fn [video-details]
                {:id (:id video-details)
                 :duration (parse-video-length (get-in video-details [:contentDetails :duration]))
-                :title (or (get-in video-details [:localizations :en :title]) (get-in video-details [:snippet :title]))})
+                :title (or (get-in video-details [:localizations :en-US :title])
+                           (get-in video-details [:localizations :en :title]) 
+                           (get-in video-details [:snippet :title]))})
              (filter #(get-in % [:contentDetails :duration] false) (:items response-data)))))))
 
 (defn set-video-lengths
