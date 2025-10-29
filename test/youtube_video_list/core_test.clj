@@ -154,7 +154,9 @@
   (testing "Less than one hour long"
     (is (= (parse-video-length "PT5M36S") "00:05:36")))
   (testing "More than one hour long"
-    (is (= (parse-video-length "PT10H15M24S") "10:15:24"))))
+    (is (= (parse-video-length "PT10H15M24S") "10:15:24")))
+  (testing "More than 24 hours long"
+    (is (= (parse-video-length "P1DT1H42M12S") "25:42:12"))))
 
 (deftest test-extract-video-info-from-partition
   (testing "Get video durations"

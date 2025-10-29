@@ -105,8 +105,9 @@
   "Take an ISO-8601 duration string and turn it into a more-readable
   hours:minutes:seconds format."
   [video-length-str]
-  (let [duration (Duration/parse video-length-str)]
-    (format "%02d:%02d:%02d" (.toHoursPart duration) (.toMinutesPart duration) (.toSecondsPart duration))))
+  (let [duration (Duration/parse video-length-str)
+        hours (+ (* 24 (.toDaysPart duration)) (.toHoursPart duration))]
+    (format "%02d:%02d:%02d" hours (.toMinutesPart duration) (.toSecondsPart duration))))
 
 (defn extract-video-info-from-partition
   "Launch a future to get video info for a single partition of (up to) 50 videos"
