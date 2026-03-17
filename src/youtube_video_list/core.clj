@@ -113,22 +113,21 @@
   "Launch a future to get video info for a single partition of (up to) 50 videos"
   [api-key video-info-partition]
   (let [video-ids (map #(:video-id %) video-info-partition)]
-    (future
-      (let [http-response (http-client/get
-                           "https://www.googleapis.com/youtube/v3/videos"
-                           {:accept :json
-                            :query-params {:key api-key
-                                           :id (str/join "," video-ids)
-                                           :part "id,snippet,contentDetails,localizations"}})
-            response-data (if (= (:status http-response) 200)
-                            (json/read-str (:body http-response) :key-fn keyword))]
-        (map (fn [video-details]
-               {:id (:id video-details)
-                :duration (parse-video-length (get-in video-details [:contentDetails :duration]))
-                :title (or (get-in video-details [:localizations :en-US :title])
-                           (get-in video-details [:localizations :en :title]) 
-                           (get-in video-details [:snippet :title]))})
-             (filter #(get-in % [:contentDetails :duration] false) (:items response-data)))))))
+    (let [http-response (http-client/get
+                         "https://www.googleapis.com/youtube/v3/videos"
+                         {:accept :json
+                          :query-params {:key api-key
+                                         :id (str/join "," video-ids)
+                                         :part "id,snippet,contentDetails,localizations"}})
+          response-data (if (= (:status http-response) 200)
+                          (json/read-str (:body http-response) :key-fn keyword))]
+      (map (fn [video-details]
+             {:id (:id video-details)
+              :duration (parse-video-length (get-in video-details [:contentDetails :duration]))
+              :title (or (get-in video-details [:localizations :en-US :title])
+                         (get-in video-details [:localizations :en :title]) 
+                         (get-in video-details [:snippet :title]))})
+           (filter #(get-in % [:contentDetails :duration] false) (:items response-data))))))
 
 (defn set-video-lengths
   "Get the video lengths for all the videos in a playlist and set the duration
@@ -136,7 +135,7 @@
   [api-key video-infos]
   (let [video-info-partitions (partition-all 50 video-infos)
         video-info-map (apply hash-map (flatten (map #(vector (:video-id %) (atom %)) video-infos)))
-        extracted-video-infos (flatten (map #(deref (extract-video-info-from-partition api-key %)) video-info-partitions))]
+        extracted-video-infos (flatten (map #(extract-video-info-from-partition api-key %) video-info-partitions))]
     (sort-by :upload-date
              (into [] (map (fn [extracted-video-data]
                              (assoc @(video-info-map (:id extracted-video-data)) 

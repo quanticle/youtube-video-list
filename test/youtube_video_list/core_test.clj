@@ -192,7 +192,7 @@
                   {:id "test-id-3"
                    :duration "duration 3"
                    :title "Test English Title 2"}]
-                 @get-durations-result))
+                 get-durations-result))
           (is (= ["https://www.googleapis.com/youtube/v3/videos"
                   {:accept :json
                    :query-params {:key "mock api key"
@@ -218,7 +218,7 @@
     (let [mock-api-key "mock-api-key"
           video-data (take 20 (generate-video-data (LocalDate/parse "2023-06-02")))]
       (with-mock mock-get-video-length-for-partition {:target :youtube-video-list.core/extract-video-info-from-partition
-                                                      :return (future (map #(hash-map :id (:video-id %) :duration "00:01:00") video-data))}
+                                                      :return (map #(hash-map :id (:video-id %) :duration "00:01:00") video-data)}
         (let [video-data-with-durations (set-video-lengths mock-api-key video-data)]
           (is (true? (every? #(= (:duration %) "00:01:00") video-data-with-durations)))
           (is (= [mock-api-key video-data] (:call-args @mock-get-video-length-for-partition)))))))
@@ -229,7 +229,7 @@
       (with-mock mock-get-video-length-for-partition {:target :youtube-video-list.core/extract-video-info-from-partition
                                                       :return (fn [_ video-data]
                                                                 (let [video-length (first (first (swap-vals! video-lengths rest)))]
-                                                                  (future (map #(hash-map :id (:video-id %) :duration video-length) video-data))))}
+                                                                  (map #(hash-map :id (:video-id %) :duration video-length) video-data)))}
         (let [video-data-with-durations-partitioned (partition-all 50 (set-video-lengths mock-api-key video-data))]
           (is (true? (every? #(= (:duration %) "00:01:00") (first video-data-with-durations-partitioned))))
           (is (true? (every? #(= (:duration %) "00:02:00") (second video-data-with-durations-partitioned))))
