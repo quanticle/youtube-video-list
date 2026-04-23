@@ -10,5 +10,7 @@
                  [org.clojure/tools.cli "1.0.219"]]
   :main ^:skip-aot youtube-video-list.core
   :target-path "target/%s"
-  :profiles {:uberjar {:aot :all
+  :profiles {:dev {:dependencies [[com.clojure-goes-fast/clj-async-profiler "2.0.0-beta1"]]
+                   :jvm-opts ["-Djdk.attach.allowAttachSelf"]}
+             :uberjar {:aot :all
                        :jvm-opts ["-Dclojure.compiler.direct-linking=true"]}})
